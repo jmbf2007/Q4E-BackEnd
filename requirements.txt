@@ -1,0 +1,7 @@
+common==0.1.2
+fastapi==0.89.1
+numpy==1.22.3
+pandas==1.4.2
+pydantic==1.8.2
+pymongo==4.1.1
+pyzmq==25.0.0
