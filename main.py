@@ -9,16 +9,21 @@ from db.mongo_manager import MongoManager
 app =FastAPI()                          
 
 
-# Instancia para la Base de Datos
+# Instancia para la Base de Datos de usuarios y modelos
 DB=MongoManager()
+
+# Instancia para la Base de Datos de datos de mercado
+MD=MongoManager()
 
 @app.on_event("startup")
 def startup():
-    DB.connect_to_database(path = "mongodb+srv://admin:admin@clusterq4e.mgux7.mongodb.net/db?retryWrites=true&w=majority")
+    DB.connect_to_database(path = "mongodb+srv://guancho:Julio788@q4e.yn4jv.mongodb.net/test")
+    MD.connect_to_database(path = "mongodb+srv://guancho:Julio%407%408%408@marketdata.nclhx.mongodb.net/test")
 
 @app.on_event("shutdown")
 def shutdown():
     DB.close_database_connection()    
+    MD.close_database_connection()
 
 
 # Funciones de las api de cada app

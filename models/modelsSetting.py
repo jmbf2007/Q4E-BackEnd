@@ -6,8 +6,6 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 import sys
-
-from lib.functions import daily_change
 sys.path.append("..")
 
 

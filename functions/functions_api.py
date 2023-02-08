@@ -8,7 +8,7 @@ import datetime as dt
 import sys
 sys.path.append("..")
 
-from main import DB
+from main import DB, MD
 
 
 from models.models import Model
@@ -104,7 +104,7 @@ def get_market_data(ticker: str, tf: int, start_date: int, end_date: int)-> pd.D
     start_date = dt.datetime.fromtimestamp(start_date)
     end_date = dt.datetime.fromtimestamp(end_date)  
     # Busqueda en la base de datos
-    document = DB.client[database][collection].find({'Time': {"$gte": start_date, "$lt": end_date}})
+    document = MD.client[database][collection].find({'Time': {"$gte": start_date, "$lt": end_date}})
     # Convertimos a df
     df = pd.DataFrame(list(document))
     df = df.drop(['_id','Ask','Bid'],axis=1)
