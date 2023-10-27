@@ -1,5 +1,4 @@
 
-from sqlite3 import Timestamp
 from typing import List,Optional
 from pydantic import BaseModel
 from datetime import datetime
@@ -20,10 +19,13 @@ class Candle(BaseModel):
     NewSession:                 bool                # True si la vela es la primera de la session
     NewWeek:                    bool                # True si la vela es la primera de la semana
     MewMonth:                   bool                # True si la vela es la primera del mes
+    Ask:                        Optional[List[int]] # Lista con los valores de Ask de la vela desde el High al Low
+    Bid:                        Optional[List[int]] # Lista con los valores de Bid de la vela desde el High al Low
+
     
     # Parámetros geometricos y tiempo de la vela
-    Ask:                        Optional[int]       # Ask de vela
-    Bid:                        Optional[int]       # Bid de la vela
+    Candle_Ask:                 Optional[int]       # Ask de vela
+    Candle_Bid:                 Optional[int]       # Bid de la vela
     Candle_Type:                Optional[int]       # 1 alcista -1 bajista 0 doji
     Range:                      Optional[int]       # Rango en ticks de vela 
     Body:                       Optional[int]       # Cuerpo en ticks de la vela
@@ -47,7 +49,20 @@ class Candle(BaseModel):
     RSI:                        Optional[int]       # Valor del indicador RSI de la vela
     ATR:                        Optional[int]       # Valor del indicador ATR de la vela
     AR:                         Optional[int]       # Valor del indicador AR de la vela
+    TLS_Upper_Delta:            Optional[int]       # Delta de la mecha superior
+    TLS_Upper_Volume:           Optional[int]       # Volumen de la mecha superior
+    TLS_Upper_Ask_Percentage:   Optional[int]       # Delta de la mecha superior en %
+    TLS_Upper_Ask_Levels_Percentage: Optional[int]  # Delta de la mecha superior en niveles de %
+    TLS_Lower_Delta:            Optional[int]       # Delta de la mecha inferior
+    TLS_Lower_Volume:           Optional[int]       # Volumen de la mecha inferior
+    TLS_Lower_Bid_Percentage:   Optional[int]       # Delta de la mecha inferior en %
+    TLS_Lower_Bid_Levels_Percentage: Optional[int]  # Delta de la mecha inferior en niveles de %
+    TLS_Max_Ask_In_Upper_Shadow: Optional[bool]     # True si el Ask maximo de la vela esta en la mecha superior
+    TLS_Max_Bid_In_Lower_Shadow: Optional[bool]     # True si el Bid maximo de la vela esta en la mecha inferior
+    TLS_Result:                 Optional[int]       # Resultado de la evaluacion de la hipotesis de la TLS: 1 largos atrapados, -1 cortos atrapados, 0 no atrapados
+
     
+
     # Indicadores on_chart
     Session_VWAP:               Optional[float]     # Valor del VWAP de la session
     Week_VWAP:                  Optional[float]     # Valor del VWAP semanal

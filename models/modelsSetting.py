@@ -109,6 +109,22 @@ class StrategyParameters(BaseModel):
     tc_concordance: Optional[bool]
     mvc_gap: Optional[int]
     invertdelta: Optional[bool]
+
+    # Añadimos los parametros de trappedlongshort
+    upper_delta_min: Optional[int]
+    upper_volume_min: Optional[int]
+    upper_ask_percentage_min: Optional[int]
+    upper_ask_levels_percentage_min: Optional[int]
+    upper_shadow_min: Optional[int]
+    upper_shadow_max: Optional[int]
+    lower_delta_max: Optional[int]
+    lower_volume_min: Optional[int]
+    lower_bid_percentage_min: Optional[int]
+    lower_bid_levels_percentage_min: Optional[int]
+    lower_shadow_min: Optional[int]
+    lower_shadow_max: Optional[int]
+    concordance: Optional[bool]
+
     
     def __init__(self, data: dict)-> None:
         self.__dict__.update(data)
@@ -124,7 +140,7 @@ class Setting():
     levels = Optional[Levels]
     strategyparameters = Optional[StrategyParameters]
     
-    def __init__(self, data: dict) -> None:      
+    def __init__(self, data: dict) -> None:  
         self.instrument =  Instrument(data['instrument'])
         self.account = Account(data['account'])
         self.indicators = Indicators(data['indicators'])

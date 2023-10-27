@@ -43,27 +43,45 @@ class cDailyResult():
         self.windays = len(self.data.Balance[self.data.Balance>0])
         self.lossdays = len(self.data.Balance[self.data.Balance<0])
         self.bevendays = len(self.data.Balance[self.data.Balance==0])
-        
+
         self.maxbalance = self.data.Balance.max()
         self.maxtickpnl = self.data.TickPnL.max()
         self.maxtrades = self.data.Trades.max()
         self.bestbalance = self.data.MaxBalance.max()
-        
+
         self.minbalance = self.data.Balance.min()
         self.mintickpnl = self.data.TickPnL.min()
         self.mintrades = self.data.Trades.min()
         self.worstbalance = self.data.MinBalance.min()
 
         if len(self.data)>0:
-            self.windays_percentage = (self.windays/len(self.data))*100
-            self.lossdays_percentage = (self.lossdays/len(self.data))*100
-            self.bevendays_percentage = (self.bevendays/len(self.data))*100
-            
-            self.averagebalance = round(self.data.Balance.sum()/len(self.data),2)
-            self.averagetickpnl = round(self.data.TickPnL.sum()/len(self.data),0)
-            self.averagetrades = round(self.data.Trades.sum()/len(self.data),0)
-            self.averagemaxbalance = round(self.data.MaxBalance.sum()/len(self.data),2)
-            self.averageminbalance = round(self.data.MinBalance.sum()/len(self.data),2)
+            self.get_attributes_values()
+        else:
+            self.initialize_attributes_zero()
+
+    # TODO Rename this here and in `Get_Attributes`
+    def initialize_attributes_zero(self):
+        self.windays_percentage = 0
+        self.lossdays_percentage = 0
+        self.bevendays_percentage = 0
+
+        self.averagebalance = 0
+        self.averagetickpnl = 0
+        self.averagetrades = 0
+        self.averagemaxbalance = 0
+        self.averageminbalance = 0
+
+    # TODO Rename this here and in `Get_Attributes`
+    def get_attributes_values(self):
+        self.windays_percentage = (self.windays/len(self.data))*100
+        self.lossdays_percentage = (self.lossdays/len(self.data))*100
+        self.bevendays_percentage = (self.bevendays/len(self.data))*100
+
+        self.averagebalance = round(self.data.Balance.sum()/len(self.data),2)
+        self.averagetickpnl = round(self.data.TickPnL.sum()/len(self.data),0)
+        self.averagetrades = round(self.data.Trades.sum()/len(self.data),0)
+        self.averagemaxbalance = round(self.data.MaxBalance.sum()/len(self.data),2)
+        self.averageminbalance = round(self.data.MinBalance.sum()/len(self.data),2)
         
     def get_balance_attributes(self):
         # Daily Balance Acumulado
@@ -153,13 +171,15 @@ class cDailyResult():
             _yaxis_name = ["Num"]            
             _yaxis_traces = [0] 
             _coloured_traces = [True]
+            _yAxis_zero = True
         elif _attb == "balance":
             _yaxis_data = [self.data.Balance.to_list(), self.data.CumBalance.to_list()]
             _traces_name = ['Balance($)',"Net Cumulative Daily Balance(net$)"]
             _traces_type = ['bar','line']
             _yaxis_name= ["$","net$"]            
             _yaxis_traces = [0,1]     
-            _coloured_traces = [True, False]        
+            _coloured_traces = [True, False]
+            _yAxis_zero =False        
         elif _attb=="tickpnl":
             _yaxis_data = [self.data.TickPnL.to_list()]
             _traces_name = ['TickPnL(ticks)']
@@ -167,6 +187,7 @@ class cDailyResult():
             _yaxis_name= ["ticks"]
             _yaxis_traces = [0] 
             _coloured_traces = [True]
+            _yAxis_zero = False
         elif _attb=="maxbalance":
             _yaxis_data = [self.data.MaxBalance.to_list()]
             _traces_name = ['MaxBalance($)']
@@ -174,6 +195,7 @@ class cDailyResult():
             _yaxis_name = ["$"]
             _yaxis_traces = [0] 
             _coloured_traces = [False]
+            _yAxis_zero = False
         elif _attb== ["minbalance"]:
             _yaxis_data = [self.data.MinBalance]
             _traces_name = ['MinBalance($)']
@@ -181,6 +203,7 @@ class cDailyResult():
             _yaxis_name=["$"]
             _yaxis_traces = [0]  
             _coloured_traces = [False]
+            _yAxis_zero = False
         elif _attb=="dailybalancerange":            
             _yaxis_data = [self.data.Balance.to_list(),self.data.MaxBalance.to_list(), self.data.MinBalance.to_list()]
             _traces_name = ['Balance($)','MaxBalance($)','MinBalance($)']
@@ -188,6 +211,7 @@ class cDailyResult():
             _yaxis_name = ["$"]
             _yaxis_traces = [0,0,0]    
             _coloured_traces = [True, True, True]
+            _yAxis_zero = False
             
         _data = {
             'xaxis_data': _xaxis_data,
@@ -199,44 +223,45 @@ class cDailyResult():
             'traces_type': _traces_type,
             'coloured_traces': _coloured_traces       
         }
-            
+
         echart = BasicEChart(_data)
-    
-        return echart.getOption()
+        _show_label = param.get('show_label', False)
+        return echart.getOption(show_label=_show_label, yAxis_zero=_yAxis_zero)
         
     # Metodo que devuelve un dataframe resumen de los attributos 
     def get_summaryDataFrame(self,_attb):
         if _attb == "dailyresults":
-      
-            df = pd.DataFrame(columns=('Total','%'))
-            row1=[self.windays,self.windays_percentage]
-            row2=[self.lossdays,self.lossdays_percentage]
-            row3=[self.bevendays,self.bevendays_percentage]
-            df = df.append(row1)
-            df = df.append(row2)
-            df = df.append(row3)
-            
-            return df
+            return self._extracted_from_get_summaryDataFrame_4()
+        if not hasattr(self,'averagetrades'):
+            self.Get_Attributes()
+        _columns=['Trades','TickPnL','Balance','MaxBalance','MinBalance']
+        _index = ['Max','Min','Avrg']
+        df = pd.DataFrame(index = _index, columns = _columns)
+        _trades = [self.maxtrades, self.mintrades, self.averagetrades]
+        _tickpnl = [self.maxtickpnl, self.mintickpnl, self.averagetickpnl]
+        _balance = [self.maxbalance, self.minbalance, self.averagebalance]
+        _maxbalance = [self.bestbalance, 0, self.averagemaxbalance]
+        _minbalance = [0, self.worstbalance, self.averageminbalance]
 
-        else:       
-            if not hasattr(self,'averagetrades'):
-                self.Get_Attributes()
-            _columns=['Trades','TickPnL','Balance','MaxBalance','MinBalance']
-            _index = ['Max','Min','Avrg']
-            df = pd.DataFrame(index = _index, columns = _columns)
-            _trades = [self.maxtrades, self.mintrades, self.averagetrades]
-            _tickpnl = [self.maxtickpnl, self.mintickpnl, self.averagetickpnl]
-            _balance = [self.maxbalance, self.minbalance, self.averagebalance]
-            _maxbalance = [self.bestbalance, 0, self.averagemaxbalance]
-            _minbalance = [0, self.worstbalance, self.averageminbalance]
+        df.Trades =_trades
+        df.TickPnL = _tickpnl
+        df.Balance = _balance
+        df.MaxBalance = _maxbalance
+        df.MinBalance = _minbalance
 
-            df.Trades =_trades
-            df.TickPnL = _tickpnl
-            df.Balance = _balance
-            df.MaxBalance = _maxbalance
-            df.MinBalance = _minbalance
-            
-            return df.to_json()
+        return df.to_json()
+
+    # TODO Rename this here and in `get_summaryDataFrame`
+    def _extracted_from_get_summaryDataFrame_4(self):
+        df = pd.DataFrame(columns=('Total','%'))
+        row1=[self.windays,self.windays_percentage]
+        row2=[self.lossdays,self.lossdays_percentage]
+        row3=[self.bevendays,self.bevendays_percentage]
+        df = df.append(row1)
+        df = df.append(row2)
+        df = df.append(row3)
+
+        return df
     
     # Método que devuelve el grafico de tarta del resumen
     def get_pie_echart(self)-> dict:

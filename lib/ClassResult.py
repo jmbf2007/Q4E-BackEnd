@@ -514,8 +514,9 @@ class cResult():
       'coloured_traces': [False,False]
     }
     
-    echart = BasicEChart(data)    
-    option = echart.getOption()
+    echart = BasicEChart(data)   
+    _show_label = param.get('show_label', False) 
+    option = echart.getOption(show_label=_show_label)
   
     # Apilamos las barras 
     option['series'][0].update({'stack': 'total'})
@@ -529,7 +530,7 @@ class cResult():
     
     return option
   
-  def get_attributegroup_option(self, param: dict)-> dict:
+  def get_attributegroup_option(self, param: dict) -> dict:
     _data = {
       'xaxis_data': self.data.index.to_list(),
       'xaxis_title': 'Number of trades',
@@ -543,8 +544,8 @@ class cResult():
     if len(_data['xaxis_data'])==0:
       return {}
     echart = BasicEChart(_data)
-    
-    return echart.getOption()
+    show_label = param.get('show_label', False)
+    return echart.getOption(show_label=show_label,)
     
   #Metodo que devuelve multiples series
   def get_attribute_multiple(self,_group,_period=100):
@@ -758,8 +759,20 @@ class cResult():
 
     return option
   
-  # Método que devuelve el option de la grafica del parametetro que se le pida
-  def get_parameter_option(self, parameter:str, data: list, initial_range: int, final_range:int, step: int,title: str) -> dict:
+  # Método que devuelve el option de la grafica del parametro que se le pida
+  def get_parameter_option(self, parameter:str, data: list, initial_range: int, final_range:int, step: int,title: str, yAxis_zero: bool=False, show_label: bool=True) -> dict:
+    """
+    Arg: 
+      parameter: str      -> Parametro que se quiere analizar
+      data: list          -> Lista de diccionarios con los datos
+      initial_range: int  -> Rango inicial del parametro. Pej: Si es Range, sería el rango minimo
+      final_range: int    -> Rango final del parametro    Pej: Si es Range, sería el rango maximo
+      step: int           -> Paso del parametro           Pej: Si es Range, sería el intervalo entre rango minimo y maximo en el que se agrupan los datos
+      title: str          -> Titulo del eje X
+
+    Return:
+      option: dict        -> Diccionario con los datos para la grafica
+    """
     win, loss = [] , []
     sorted_data = sorted(data, key=lambda i: i[parameter])
     initial_range = int(initial_range)
@@ -771,12 +784,15 @@ class cResult():
     parameter_win = [sum(1 if x==i and y>=0 else 0 for x,y in zip(parameter_data,parameter_tick_result)) for i in set_parameter_data]
     parameter_loss = [sum(1 if x==i and y<0 else 0 for x,y in zip(parameter_data,parameter_tick_result)) for i in set_parameter_data]
 
-    
-    if step>1:      # Agruapamos los win y loss
+    # Agruapamos los win y loss
+    if step>1:     
       win = [sum(w for w, l in zip(parameter_win, set_parameter_data) if i <= l < i + step ) for i in range(initial_range, final_range, step)] 
       loss = [sum(w for w, l in zip(parameter_loss, set_parameter_data) if i <= l < i + step ) for i in range(initial_range, final_range, step)]
+      intervals = list(range(initial_range, final_range + step, step))
+      xaxis_data = []
+      for i in range(len(intervals)-1):
+        xaxis_data.append(f"{intervals[i]} - {intervals[i+1]}") if intervals[i+1]<=final_range else xaxis_data.append(f"{intervals[i]} - {final_range}")
     
-    #parameter_data_rwin = [int(w/(w+l)*100) for w,l in zip(parameter_win,parameter_loss)]  
     else:
       for param in range(int(initial_range),int(final_range)):
           if param in set_parameter_data:
@@ -785,9 +801,10 @@ class cResult():
           else:
               win.append(0)
               loss.append(0) 
+      xaxis_data = [str(x) for x in range(int(initial_range),int(final_range))]
     
     data = {
-        'xaxis_data': list(range(int(initial_range),int(final_range),step)),
+        'xaxis_data': xaxis_data,
         'xaxis_title': title,
         'yaxis_data': [win, loss],
         'yaxis_name': ['trades'],
@@ -798,11 +815,11 @@ class cResult():
     }
     
     echart = BasicEChart(data)
-    option = echart.getOption()
+    option = echart.getOption(yAxis_zero=yAxis_zero, show_label=show_label)
 
     # Apilamos las barras 
-    option['series'][0].update({'stack': 'total', 'barWidth': '40%'})
-    option['series'][1].update({'stack': 'total', 'barWidth': '40%'})
+    option['series'][0].update({'stack': 'total', 'barWidth': '98%'})
+    option['series'][1].update({'stack': 'total', 'barWidth': '98%'})
 
     # Para el total trades al poner las barras en stack hay que redimensionar el eje y
     option['yAxis'][0]['max'] = max(win)+max(loss) 
@@ -817,3 +834,362 @@ class cResult():
 
 
     return option
+  
+  # Metodo que devuelve la grafica de un parametro que varie porcentrualmente dividido en intervalos y clasificado por buy y sell
+  def get_percent_parameter_option(self, parameter:str, data: list, step: int,title: str=None, show_label: bool=True) -> dict:
+    """
+    
+    """
+
+    # Creamos los datos
+    initial_range, final_range = 0, 100-step
+
+    # Ordenamos los datos
+    sorted_data = sorted(data, key=lambda i: i[parameter])
+
+    # Agrupamos los datos en funcion del parametro
+    parameter_data= [ x[parameter] for x in sorted_data]
+    parameter_tick_result = [ x['tick_result'] for x in sorted_data]  
+    parameter_direction = [ x['trade_type'] for x in sorted_data]
+
+    # Calculamos los win y loss para cada tipo de trade
+    set_parameter_data = list(set(parameter_data))
+    total_buy_win = [sum(1 if x==i and y>=0 and d=='buy' else 0 for x,y,d in zip(parameter_data,parameter_tick_result,parameter_direction)) for i in set_parameter_data]
+    total_buy_loss = [sum(1 if x==i and y<0 and d=='buy' else 0 for x,y,d in zip(parameter_data,parameter_tick_result,parameter_direction)) for i in set_parameter_data]
+    total_sell_win = [sum(1 if x==i and y>=0 and d=='sell' else 0 for x,y,d in zip(parameter_data,parameter_tick_result,parameter_direction)) for i in set_parameter_data]
+    total_sell_loss = [sum(1 if x==i and y<0 and d=='sell' else 0 for x,y,d in zip(parameter_data,parameter_tick_result,parameter_direction)) for i in set_parameter_data]
+
+    # Calculamos los win y loss para cada intervalo
+    buy_win = [sum(w for w, l in zip(total_buy_win, set_parameter_data) if i <= l < i + step)   for i in range(initial_range, final_range, step)] 
+    buy_loss = [sum(w for w, l in zip(total_buy_loss, set_parameter_data) if i <= l < i + step) for i in range(initial_range, final_range, step)]
+    sell_win = [sum(w for w, l in zip(total_sell_win, set_parameter_data) if i <= l < i + step) for i in range(initial_range, final_range, step)]
+    sell_loss = [sum(w for w, l in zip(total_sell_loss, set_parameter_data) if i <= l < i + step) for i in range(initial_range, final_range, step)]
+    intervals = list(range(initial_range, final_range + step, step))
+    yaxis_data = []
+    for i in range(len(intervals)-1):
+      yaxis_data.append(f"{intervals[i]} - {intervals[i+1]}") if intervals[i+1]<=final_range else yaxis_data.append(f"{intervals[i]} - {final_range}")
+
+        
+    # Creamos el option 
+    tooltip = {
+      'trigger': 'axis',
+      'axisPointer': {
+        'type': 'shadow'
+      }
+    }
+    legend = {},
+    grid = {
+      'left': '3%',
+      'right': '4%',
+      'bottom': '3%',
+      'containLabel': True
+    },
+    xAxis = {
+      'type': 'value',
+      'name': 'Trades',
+      "nameLocation": "center",
+      "axisLine": {
+          "show": True,
+          "lineStyle": {
+              "color": "black"
+          },
+          "onZero": True
+      } 
+
+    },
+    yAxis = {
+      'type': 'category',
+      'data': yaxis_data,
+      'name': title,
+    },
+    series = [
+      {
+        'name': 'Buy Win',
+        'type': 'bar',
+        'stack': 'total',
+        'label': {
+            'show': show_label
+          },
+        'emphasis': {
+          'focus': 'series'
+        },
+        'color': '#196F3D ',
+        'data': buy_win
+      },
+      {
+        'name': 'Sell Win',
+        'type': 'bar',
+        'stack': 'total',
+        'label': {
+            'show': show_label
+          },
+        'emphasis': {
+          'focus': 'series'
+        },
+        'color': '#16A085',
+        'data': sell_win
+      },
+      {
+        'name': 'Buy Loss',
+        'type': 'bar',
+        'stack': 'total',
+        'label': {
+            'show': show_label
+          },
+        'emphasis': {
+          'focus': 'series'
+        },
+        'color': '#FF4C33',
+        'data': buy_loss
+      },
+      {
+        'name': 'Sell Loss',
+        'type': 'bar',
+        'stack': 'total',
+        'label': {
+            'show': show_label
+          },
+        'emphasis': {
+          'focus': 'series'
+        },
+        'color': '#D68910',
+        'data': sell_loss
+      },    
+    ]
+
+    return {
+            "tooltip":  tooltip,
+            "legend":   legend,
+            "grid":     grid,
+            "xAxis":    xAxis,
+            "yAxis":    yAxis,
+            "series":   series,    
+        } 
+
+  # Metodo que devuelve los options de las graficas del indicador TLS para el analisis de sensibilidad
+  def get_tls_information_options(self, data: list, value_step: int,percentage_step: int, lower_delta_max: int, lower_delta_min: int, upper_delta_max: int,upper_delta_min: int, show_label: bool=True) -> dict:
+    """
+    La informacion del indicador Trapped Long Short (TLS) se divide en varias graficas que recogen lo siguiente:
+    - Para los trades Buy:
+        1) Grafica con la distribucion win/loss en funcion del parametro TLS_Lower_Delta. Se agrupan segun el parametro value_step desde Lower_delta_max hasta max_value
+        2) Grafica con la disrtibucion win/loss en funcion del parametro TLS_Lower_Delta_Percentage. Se agrupan segun el parametro percentage_step de 0 a 100
+        3) Grafica con la distribucion win/loss en funcion del parametro TLS_Lower_Delta_Levels_Percentage. Se agrupan segun el parametro percentage_step de 0 a 100
+        4) Grafica con la disrtibucion win/loss para cada valor del parametro TLS_Result. TLS_Result toma 3 valores: 1,-1 y 0
+    - Para los trades Sell:
+        5) Grafica con la distribucion win/loss en funcion del parametro TLS_Upper_Delta. Se agrupan segun el parametro value_step desde Upper_delta_min hasta max_value
+        6) Grafica con la disrtibucion win/loss en funcion del parametro TLS_Upper_Delta_Percentage. Se agrupan segun el parametro percentage_step de 0 a 100
+        7) Grafica con la distribucion win/loss en funcion del parametro TLS_Upper_Delta_Levels_Percentage. Se agrupan segun el parametro percentage_step de 0 a 100
+        8) Grafica con la disrtibucion win/loss para cada valor del parametro TLS_Result. TLS_Result toma 3 valores: 1,-1 y 0
+    """
+    # Primero filtramos los trades Buy y Sell
+    buy_data = [x for x in data if x['trade_type']=='buy']
+    sell_data = [x for x in data if x['trade_type']=='sell']
+
+    # Creamos los datos para las graficas de los trades Buy
+
+    # 1) El primer parametro es TLS_Lower_Delta y la ordenamos por este parametro
+    sorted_data = sorted(buy_data, key=lambda i: i['TLS_Lower_Delta'])
+    # Creamos las listas de los parametros y los resultdos
+    buy_tls_lower_delta = [ x['TLS_Lower_Delta'] for x in sorted_data]
+    buy_tls_lower_delta_result = [ x['tick_result'] for x in sorted_data]  
+
+    # Creamos los intervalos para el parametro TLS_Lower_Delta desde lower_delta_min hasta lower_delta_max con step value_step es ultimo intervalo es max(buy_tls_lower_delta)
+    buy_tls_lower_delta_interval = list(range(lower_delta_max,lower_delta_min,-value_step))
+    buy_tls_lower_delta_interval.append(max(buy_tls_lower_delta))
+
+    # Creamos las listas de win y loss para cada intervalo, de forma que win[i] es el numero de trades ganadores para valores de TLS_Lower_Delta en el intervalo que buy_tls_lower_delta_interval[i] y buy_tls_lower_delta_interval[i+1], sabiendo que el ultmo intervalo recoge todos los casos mayores que buy_tls_lower_delta_interval[-2]
+    buy_tls_lower_delta_win = [sum(1 if x>=i and x<i+value_step and y>=0 else 0 for x,y in zip(buy_tls_lower_delta,buy_tls_lower_delta_result)) for i in buy_tls_lower_delta_interval]
+    buy_tls_lower_delta_loss = [sum(1 if x>=i and x<i+value_step and y<0 else 0 for x,y in zip(buy_tls_lower_delta,buy_tls_lower_delta_result)) for i in buy_tls_lower_delta_interval]
+
+    #Creamos las etiquetas para el eje X
+    buy_tls_lower_delta_xaxis_data = []
+    for i in range(len(buy_tls_lower_delta_interval)-1):
+      buy_tls_lower_delta_xaxis_data.append(f"{buy_tls_lower_delta_interval[i]} - {buy_tls_lower_delta_interval[i+1]}") if buy_tls_lower_delta_interval[i+1]<=lower_delta_max else buy_tls_lower_delta_xaxis_data.append(f"{buy_tls_lower_delta_interval[i]} - {lower_delta_max}")
+
+    
+    # 2) El segundo parametro es TLS_Lower_Delta_Percentage y la ordenamos por este parametro
+    sorted_data = sorted(buy_data, key=lambda i: i['TLS_Lower_Bid_Percentage'])
+    # Creamos las listas de los parametros y los resultdos
+    buy_tls_lower_delta_percentage = [ x['TLS_Lower_Bid_Percentage'] for x in sorted_data]
+    buy_tls_lower_delta_percentage_result = [ x['tick_result'] for x in sorted_data]
+
+    # Creamos los intervalos para el parametro TLS_Lower_Delta_Percentage desde 0 hasta 100 con step percentage_step es ultimo intervalo es 100
+    buy_tls_lower_delta_percentage_interval = list(range(0,100,percentage_step))
+    buy_tls_lower_delta_percentage_interval.append(100)
+
+    # Creamos las listas de win y loss para cada intervalo, de forma que win[i] es el numero de trades ganadores para valores de TLS_Lower_Delta_Percentage en el intervalo que buy_tls_lower_delta_percentage_interval[i] y buy_tls_lower_delta_percentage_interval[i+1], sabiendo que el ultmo intervalo recoge todos los casos mayores que buy_tls_lower_delta_percentage_interval[-2]
+    buy_tls_lower_delta_percentage_win = [sum(1 if x>=i and x<i+percentage_step and y>=0 else 0 for x,y in zip(buy_tls_lower_delta_percentage,buy_tls_lower_delta_percentage_result)) for i in buy_tls_lower_delta_percentage_interval]
+    buy_tls_lower_delta_percentage_loss = [sum(1 if x>=i and x<i+percentage_step and y<0 else 0 for x,y in zip(buy_tls_lower_delta_percentage,buy_tls_lower_delta_percentage_result)) for i in buy_tls_lower_delta_percentage_interval]
+
+    #Creamos las etiquetas para el eje X
+    buy_tls_lower_delta_percentage_xaxis_data = []
+    for i in range(len(buy_tls_lower_delta_percentage_interval)-1):
+      buy_tls_lower_delta_percentage_xaxis_data.append(f"{buy_tls_lower_delta_percentage_interval[i]} - {buy_tls_lower_delta_percentage_interval[i+1]}") if buy_tls_lower_delta_percentage_interval[i+1]<=100 else buy_tls_lower_delta_percentage_xaxis_data.append(f"{buy_tls_lower_delta_percentage_interval[i]} - {100}")
+
+    
+    # 3) El tercer parametro es TLS_Lower_Delta_Levels_Percentage y la ordenamos por este parametro
+    sorted_data = sorted(buy_data, key=lambda i: i['TLS_Lower_Bid_Levels_Percentage'])
+    # Creamos las listas de los parametros y los resultdos
+    buy_tls_lower_delta_levels_percentage = [ x['TLS_Lower_Bid_Levels_Percentage'] for x in sorted_data]
+    buy_tls_lower_delta_levels_percentage_result = [ x['tick_result'] for x in sorted_data]
+
+    # Creamos los intervalos para el parametro TLS_Lower_Delta_Levels_Percentage desde 0 hasta 100 con step percentage_step es ultimo intervalo es 100
+    buy_tls_lower_delta_levels_percentage_interval = list(range(0,100,percentage_step))
+    buy_tls_lower_delta_levels_percentage_interval.append(100)
+
+    # Creamos las listas de win y loss para cada intervalo, de forma que win[i] es el numero de trades ganadores para valores de TLS_Lower_Delta_Levels_Percentage en el intervalo que buy_tls_lower_delta_levels_percentage_interval[i] y buy_tls_lower_delta_levels_percentage_interval[i+1], sabiendo que el ultmo intervalo recoge todos los casos mayores que buy_tls_lower_delta_levels_percentage_interval[-2]
+    buy_tls_lower_delta_levels_percentage_win = [sum(1 if x>=i and x<i+percentage_step and y>=0 else 0 for x,y in zip(buy_tls_lower_delta_levels_percentage,buy_tls_lower_delta_levels_percentage_result)) for i in buy_tls_lower_delta_levels_percentage_interval]
+    buy_tls_lower_delta_levels_percentage_loss = [sum(1 if x>=i and x<i+percentage_step and y<0 else 0 for x,y in zip(buy_tls_lower_delta_levels_percentage,buy_tls_lower_delta_levels_percentage_result)) for i in buy_tls_lower_delta_levels_percentage_interval]
+
+    #Creamos las etiquetas para el eje X
+    buy_tls_lower_delta_levels_percentage_xaxis_data = []
+    for i in range(len(buy_tls_lower_delta_levels_percentage_interval)-1):
+      buy_tls_lower_delta_levels_percentage_xaxis_data.append(f"{buy_tls_lower_delta_levels_percentage_interval[i]} - {buy_tls_lower_delta_levels_percentage_interval[i+1]}") if buy_tls_lower_delta_levels_percentage_interval[i+1]<=100 else buy_tls_lower_delta_levels_percentage_xaxis_data.append(f"{buy_tls_lower_delta_levels_percentage_interval[i]} - {100}")
+
+    
+    # 4) El cuarto parametro es TLS_Result y la ordenamos por este parametro
+    sorted_data = sorted(buy_data, key=lambda i: i['TLS_Result'])
+    # Creamos las listas de los parametros y los resultdos
+    buy_tls_result = [ x['TLS_Result'] for x in sorted_data]
+    buy_tls_result_result = [ x['tick_result'] for x in sorted_data]
+    
+    # Creamos las listas de win y loss para cada valor de TLS_Result, de forma que win[i] es el numero de trades ganadores para valores de TLS_Result, que pueden ser 1, -1 o 0
+    buy_tls_result_win = [sum(1 if x==i and y>=0 else 0 for x,y in zip(buy_tls_result,buy_tls_result_result)) for i in [-1,0,1]]
+    buy_tls_result_loss = [sum(1 if x==i and y<0 else 0 for x,y in zip(buy_tls_result,buy_tls_result_result)) for i in [-1,0,1]]
+
+    #Creamos las etiquetas para el eje X
+    tls_result_xaxis_data = ['Trapped Short','Neutral','Trapped Long']
+
+    # Creamos los datos para las graficas de los trades Sell
+    # 5) El primer parametro es TLS_Upper_Delta y la ordenamos por este parametro
+    sorted_data = sorted(sell_data, key=lambda i: i['TLS_Upper_Delta'])
+    # Creamos las listas de los parametros y los resultdos
+    sell_tls_upper_delta = [ x['TLS_Upper_Delta'] for x in sorted_data]
+    sell_tls_upper_delta_result = [ x['tick_result'] for x in sorted_data]
+
+    # Creamos los intervalos para el parametro TLS_Upper_Delta desde upper_delta_min hasta upper_delta_max con step value_step es ultimo intervalo es max(sell_tls_upper_delta)
+    sell_tls_upper_delta_interval = list(range(upper_delta_min,upper_delta_max,value_step))
+    sell_tls_upper_delta_interval.append(max(sell_tls_upper_delta))
+
+    # Creamos las listas de win y loss para cada intervalo, de forma que win[i] es el numero de trades ganadores para valores de TLS_Upper_Delta en el intervalo que sell_tls_upper_delta_interval[i] y sell_tls_upper_delta_interval[i+1], sabiendo que el ultmo intervalo recoge todos los casos mayores que sell_tls_upper_delta_interval[-2]
+    sell_tls_upper_delta_win = [sum(1 if x>=i and x<i+value_step and y>=0 else 0 for x,y in zip(sell_tls_upper_delta,sell_tls_upper_delta_result)) for i in sell_tls_upper_delta_interval]
+    sell_tls_upper_delta_loss = [sum(1 if x>=i and x<i+value_step and y<0 else 0 for x,y in zip(sell_tls_upper_delta,sell_tls_upper_delta_result)) for i in sell_tls_upper_delta_interval]
+
+    #Creamos las etiquetas para el eje X
+    sell_tls_upper_delta_xaxis_data = []
+    for i in range(len(sell_tls_upper_delta_interval)-1):
+      sell_tls_upper_delta_xaxis_data.append(f"{sell_tls_upper_delta_interval[i]} - {sell_tls_upper_delta_interval[i+1]}") if sell_tls_upper_delta_interval[i+1]<=upper_delta_max else sell_tls_upper_delta_xaxis_data.append(f"{sell_tls_upper_delta_interval[i]} - {upper_delta_max}")
+
+    
+    # 6) El segundo parametro es TLS_Upper_Delta_Percentage y la ordenamos por este parametro
+    sorted_data = sorted(sell_data, key=lambda i: i['TLS_Upper_Ask_Percentage'])
+    # Creamos las listas de los parametros y los resultdos
+    sell_tls_upper_delta_percentage = [ x['TLS_Upper_Ask_Percentage'] for x in sorted_data]
+    sell_tls_upper_delta_percentage_result = [ x['tick_result'] for x in sorted_data]
+
+    # Creamos los intervalos para el parametro TLS_Upper_Delta_Percentage desde 0 hasta 100 con step percentage_step es ultimo intervalo es 100
+    sell_tls_upper_delta_percentage_interval = list(range(0,100,percentage_step))
+    sell_tls_upper_delta_percentage_interval.append(100)
+
+    # Creamos las listas de win y loss para cada intervalo, de forma que win[i] es el numero de trades ganadores para valores de TLS_Upper_Delta_Percentage en el intervalo que sell_tls_upper_delta_percentage_interval[i] y sell_tls_upper_delta_percentage_interval[i+1], sabiendo que el ultmo intervalo recoge todos los casos mayores que sell_tls_upper_delta_percentage_interval[-2]
+    sell_tls_upper_delta_percentage_win = [sum(1 if x>=i and x<i+percentage_step and y>=0 else 0 for x,y in zip(sell_tls_upper_delta_percentage,sell_tls_upper_delta_percentage_result)) for i in sell_tls_upper_delta_percentage_interval]
+    sell_tls_upper_delta_percentage_loss = [sum(1 if x>=i and x<i+percentage_step and y<0 else 0 for x,y in zip(sell_tls_upper_delta_percentage,sell_tls_upper_delta_percentage_result)) for i in sell_tls_upper_delta_percentage_interval]
+
+    #Creamos las etiquetas para el eje X
+    sell_tls_upper_delta_percentage_xaxis_data = []
+    for i in range(len(sell_tls_upper_delta_percentage_interval)-1):
+      sell_tls_upper_delta_percentage_xaxis_data.append(f"{sell_tls_upper_delta_percentage_interval[i]} - {sell_tls_upper_delta_percentage_interval[i+1]}") if sell_tls_upper_delta_percentage_interval[i+1]<=100 else sell_tls_upper_delta_percentage_xaxis_data.append(f"{sell_tls_upper_delta_percentage_interval[i]} - {100}")
+
+    
+    # 7) El tercer parametro es TLS_Upper_Delta_Levels_Percentage y la ordenamos por este parametro
+    sorted_data = sorted(sell_data, key=lambda i: i['TLS_Upper_Ask_Levels_Percentage'])
+    # Creamos las listas de los parametros y los resultdos
+    sell_tls_upper_delta_levels_percentage = [ x['TLS_Upper_Ask_Levels_Percentage'] for x in sorted_data]
+    sell_tls_upper_delta_levels_percentage_result = [ x['tick_result'] for x in sorted_data]
+
+    # Creamos los intervalos para el parametro TLS_Upper_Delta_Levels_Percentage desde 0 hasta 100 con step percentage_step es ultimo intervalo es 100
+    sell_tls_upper_delta_levels_percentage_interval = list(range(0,100,percentage_step))
+    sell_tls_upper_delta_levels_percentage_interval.append(100)
+
+    # Creamos las listas de win y loss para cada intervalo, de forma que win[i] es el numero de trades ganadores para valores de TLS_Upper_Delta_Levels_Percentage en el intervalo que sell_tls_upper_delta_levels_percentage_interval[i] y sell_tls_upper_delta_levels_percentage_interval[i+1], sabiendo que el ultmo intervalo recoge todos los casos mayores que sell_tls_upper_delta_levels_percentage_interval[-2]
+    sell_tls_upper_delta_levels_percentage_win = [sum(1 if x>=i and x<i+percentage_step and y>=0 else 0 for x,y in zip(sell_tls_upper_delta_levels_percentage,sell_tls_upper_delta_levels_percentage_result)) for i in sell_tls_upper_delta_levels_percentage_interval]
+    sell_tls_upper_delta_levels_percentage_loss = [sum(1 if x>=i and x<i+percentage_step and y<0 else 0 for x,y in zip(sell_tls_upper_delta_levels_percentage,sell_tls_upper_delta_levels_percentage_result)) for i in sell_tls_upper_delta_levels_percentage_interval]
+
+    #Creamos las etiquetas para el eje X
+    sell_tls_upper_delta_levels_percentage_xaxis_data = []
+    for i in range(len(sell_tls_upper_delta_levels_percentage_interval)-1):
+      sell_tls_upper_delta_levels_percentage_xaxis_data.append(f"{sell_tls_upper_delta_levels_percentage_interval[i]} - {sell_tls_upper_delta_levels_percentage_interval[i+1]}") if sell_tls_upper_delta_levels_percentage_interval[i+1]<=100 else sell_tls_upper_delta_levels_percentage_xaxis_data.append(f"{sell_tls_upper_delta_levels_percentage_interval[i]} - {100}")
+
+    
+    # 8) El cuarto parametro es TLS_Result y la ordenamos por este parametro
+    sorted_data = sorted(sell_data, key=lambda i: i['TLS_Result'])
+    # Creamos las listas de los parametros y los resultdos
+    sell_tls_result = [ x['TLS_Result'] for x in sorted_data]
+    sell_tls_result_result = [ x['tick_result'] for x in sorted_data]
+
+    # Creamos las listas de win y loss para cada valor de TLS_Result, de forma que win[i] es el numero de trades ganadores para valores de TLS_Result, que pueden ser 1, -1 o 0
+    sell_tls_result_win = [sum(1 if x==i and y>=0 else 0 for x,y in zip(sell_tls_result,sell_tls_result_result)) for i in [-1,0,1]]
+    sell_tls_result_loss = [sum(1 if x==i and y<0 else 0 for x,y in zip(sell_tls_result,sell_tls_result_result)) for i in [-1,0,1]]
+
+
+    # Creamos los options para cada grafica
+    option_1 = self.get_simple_option(buy_tls_lower_delta_xaxis_data, buy_tls_lower_delta_win, buy_tls_lower_delta_loss, title='TLS Lower Delta', show_label=show_label)
+    option_2 = self.get_simple_option(buy_tls_lower_delta_percentage_xaxis_data, buy_tls_lower_delta_percentage_win, buy_tls_lower_delta_percentage_loss, title='TLS Lower Bid Percentage', show_label=show_label)
+    option_3 = self.get_simple_option(buy_tls_lower_delta_levels_percentage_xaxis_data, buy_tls_lower_delta_levels_percentage_win, buy_tls_lower_delta_levels_percentage_loss, title='TLS Lower Bid Levels Percentage', show_label=show_label)
+    option_4 = self.get_simple_option(tls_result_xaxis_data, buy_tls_result_win, buy_tls_result_loss, title='TLS Result', show_label=show_label)
+    option_5 = self.get_simple_option(sell_tls_upper_delta_xaxis_data, sell_tls_upper_delta_win, sell_tls_upper_delta_loss, title='TLS Upper Delta', show_label=show_label)
+    option_6 = self.get_simple_option(sell_tls_upper_delta_percentage_xaxis_data, sell_tls_upper_delta_percentage_win, sell_tls_upper_delta_percentage_loss, title='TLS Upper Ask Percentage', show_label=show_label)
+    option_7 = self.get_simple_option(sell_tls_upper_delta_levels_percentage_xaxis_data, sell_tls_upper_delta_levels_percentage_win, sell_tls_upper_delta_levels_percentage_loss, title='TLS Upper Ask Levels Percentage', show_label=show_label)
+    option_8 = self.get_simple_option(tls_result_xaxis_data, sell_tls_result_win, sell_tls_result_loss, title='TLS Result', show_label=show_label)
+
+    # Devolvemos los options
+    return {
+      'option_tls_buy_lower_delta': option_1,
+      'option_tls_buy_lower_bid_percentage': option_2,
+      'option_tls_buy_lower_bid_levels_percentage': option_3,
+      'option_tls_buy_result': option_4,
+      'option_tls_sell_upper_delta': option_5,
+      'option_tls_sell_upper_ask_percentage': option_6,
+      'option_tls_sell_upper_ask_levels_percentage': option_7,
+      'option_tls_sell_result': option_8,
+    }
+
+
+
+  def get_simple_option(self, xaxis_data: list, win: list, loss: list,title: str=None, show_label: bool=True) -> dict:
+    
+    data = {
+        'xaxis_data': xaxis_data,
+        'xaxis_title': title,
+        'yaxis_data': [win, loss],
+        'yaxis_name': ['trades'],
+        'yaxis_traces': [0, 0],
+        'traces_name': ['Win', 'Loss'],
+        'traces_type': ['bar', 'bar'],
+        'coloured_traces': [False, False]
+    }
+    
+    echart = BasicEChart(data)
+    option = echart.getOption(yAxis_zero=True, show_label=show_label)
+
+    # Apilamos las barras 
+    option['series'][0].update({'stack': 'total', 'barWidth': '98%'})
+    option['series'][1].update({'stack': 'total', 'barWidth': '98%'})
+
+    # Para el total trades al poner las barras en stack hay que redimensionar el eje y
+    option['yAxis'][0]['max'] = max(win)+max(loss) 
+    option['yAxis'][0]['axisLine']['onZero'] = False
+    option['yAxis'][0]['offset'] = 40
+
+
+    #Cambiamos los colores
+    option.update({'color': ['green','red']})   
+    option.update({'media': {'query': { 'minAspectRation' : 1}}})
+
+    return option
+
+
+
+
+
+

@@ -234,8 +234,7 @@ class cCase():
     # Metodo que cuenta el numero de nivels activos
     def active_levels(self)  -> int :
         return sum(1 if level.active else 0 for level in self.levels)
-
-    
+  
     # Método que comprueba si una vela tiene Imbalances
     def check_newImbalances(self, main:bool):
         pass
@@ -327,12 +326,13 @@ class cCase():
     def update_profit_loss(self):
         profit = (self.candle.High - self.position.open_price)/self.setting.instrument.ticksize if self.position.trade_type == "buy" else (self.position.open_price - self.candle.Low)/self.setting.instrument.ticksize
         loss = (self.position.open_price - self.candle.Low)/self.setting.instrument.ticksize if self.position.trade_type == "buy" else (self.candle.High - self.position.open_price)/self.setting.instrument.ticksize
-        
-        self.position.maxProfit = profit if profit>self.position.maxProfit else self.position.maxProfit
-        self.position.maxLoss = loss if loss>self.position.maxLoss else self.position.maxLoss
+
+        self.position.maxProfit = max(profit, self.position.maxProfit)
+        self.position.maxLoss = max(loss, self.position.maxLoss)
           
     # Devuelve True se alcanza el TP or SL
     def reached_tpsl(self) -> bool:
+        #print(f'Position: {self.position.open_time} - MaxProfit: {self.position.maxProfit} - TP: {self.position.tp} - MaxLoss: {self.position.maxLoss} - SL: {self.position.sl}')
         return (self.position.maxProfit>=self.position.tp) or (self.position.maxLoss>=self.position.sl)
     
     # Devuelve True se alcanza el TP y SL a la vez en la misma vela
@@ -482,53 +482,23 @@ class cCase():
                                  open_time = self.candle.Time,
                                  open_price = self.order.open_price,
                                  size = self.order.size,
-                                 tp = self.set_tpsl("tp"),
-                                 sl = self.set_tpsl("sl"),
-                                 tc = self.strategy_logic.tc[self.strategy_logic.tc_entry]['Index'],                      # Pasamos el indice la de vela de toque
-                                 tc_list_index = self.strategy_logic.tc[self.strategy_logic.tc_entry]['tc_list_index'],   # Posicion que ocupa la tc en la lista de tc
-                                 level_index = self.strategy_logic.tc[self.strategy_logic.tc_entry]['level_index'] if 'level_index' in self.strategy_logic.tc[self.strategy_logic.tc_entry].keys() else None,        # Indice de la vela que genera el nivel de entrada si es una estrategia de niveles
+                                 tp = self.order.tp,
+                                 sl = self.order.sl,
+                                 tc = self.strategy_logic.tc[-1]['Index'],                      # Pasamos el indice la de vela de toque
+                                 tc_list_index = self.strategy_logic.tc[-1]['tc_list_index'],   # Posicion que ocupa la tc en la lista de tc
+                                 level_index = self.strategy_logic.tc[-1]['level_index'] if 'level_index' in self.strategy_logic.tc[-1].keys() else None,        # Indice de la vela que genera el nivel de entrada si es una estrategia de niveles
                                  levels = self.get_levels_position_time(),                                                  # Diccionario con el valor de los niveles cuando entra la posicion
-                                 relative_hour = self.strategy_logic.tc[self.strategy_logic.tc_entry]['Relative_Hour'],    # Hora relativa de la vela de toque  
-                                 market_day = self.strategy_logic.tc[self.strategy_logic.tc_entry]['Market_Day'],         # Día de mercado de la vela de toque
-                                 interval = self.strategy_logic.tc[self.strategy_logic.tc_entry]['Index'] - self.strategy_logic.tc[self.strategy_logic.tc_entry]['level_index'] if 'level_index' in self.strategy_logic.tc[self.strategy_logic.tc_entry].keys() else None ,     # Intervalo entre la vela de toque y la vela que origina el nivel
-                                 interval_days = int(self.strategy_logic.tc[self.strategy_logic.tc_entry]['Market_Day'] - self.data.Market_Day[self.strategy_logic.tc[self.strategy_logic.tc_entry]['level_index']]) if 'level_index' in self.strategy_logic.tc[self.strategy_logic.tc_entry].keys() else None# Diferencia de dias de mercado entre la vela de toque y la vela que origina el nivel
+                                 relative_hour = self.strategy_logic.tc[-1]['Relative_Hour'],    # Hora relativa de la vela de toque  
+                                 market_day = self.strategy_logic.tc[-1]['Market_Day'],         # Día de mercado de la vela de toque
+                                 interval = self.strategy_logic.tc[-1]['Index'] - self.strategy_logic.tc[-1]['level_index'] if 'level_index' in self.strategy_logic.tc[-1].keys() else None ,     # Intervalo entre la vela de toque y la vela que origina el nivel
+                                 interval_days = int(self.strategy_logic.tc[-1]['Market_Day'] - self.data.Market_Day[self.strategy_logic.tc[-1]['level_index']]) if 'level_index' in self.strategy_logic.tc[-1].keys() else None# Diferencia de dias de mercado entre la vela de toque y la vela que origina el nivel
 
         )
-        
-        # Una vez asignada la posicion eliminamos el atributo que guardaba la posicion en la tabla de tc de la ultima entrada
-        del self.strategy_logic.tc_entry
         
 
         self.close_order("entry")
     
-    # Metodo que asigna los tp y sl
-    def set_tpsl(self, tpsl: str) -> int:
-        if self.setting.trademanagement.entry_type == "Auto":
-            return self.auto_tpsl(tpsl)
-        
-        elif self.setting.trademanagement.entry_type == "Invert":
-            return self.invert_tpsl(tpsl)
 
-        elif tpsl=="tp":
-            return self.setting.trademanagement.tp
-        else:
-            return self.setting.trademanagement.sl
-
-    # Metodo que calcula los tp y sl automaticamente
-    def auto_tpsl(self, tpsl: str) -> int:
-        if self.strategy_type == "level+tc":
-            sl = int(abs(self.order.open_price - self.strategy_logic.tc[self.strategy_logic.tc_entry]['auto_worstprice'])/self.setting.instrument.ticksize)
-            sl = max(sl, self.setting.trademanagement.slmin)
-            return sl if tpsl == "sl" else int(self.get_ratio_tpsl() * sl)
-        elif self.strategy_type == "reversal":
-            sl = self.strategy_logic.tc[self.strategy_logic.tc_entry]['auto_sl']
-            return sl if tpsl == "sl" else int(self.get_ratio_tpsl() * sl)
-            
-    def get_ratio_tpsl(self):
-        return self.setting.trademanagement.ratio_tpsl if hasattr(self.setting.trademanagement, "ratio_tpsl") else 1
-
-    def invert_tpsl(self, tpsl:str) -> int:
-        return self.auto_tpsl("tp") if tpsl=="sl" else self.auto_tpsl("sl")        
 
     # Metodo que devuelve un diccionario con los valores de los niveles (si los hay) en el precio de la posicion
     def get_levels_position_time(self):
@@ -541,8 +511,8 @@ class cCase():
                 return "Daily_VWAP"
             elif level_name == "Weekly VWAP":
                 return "Weekly_VWAP"
-            elif level_name == "Last Day Levels":
-                return "LDL"
+            elif level_name == "LD_High" or level_name == "LD_Low" or level_name == "LD_Close":
+                return level_name
             elif level_name == "Current Day Levels":
                 return "CDL"
             elif level_name == "Market Session Levels":
@@ -555,23 +525,26 @@ class cCase():
             level = level_name_to_column(level)
             if level == "PP":
                 for pplevel in ['PP','S1','S2','S3','R1','R2','R3']:
-                    levels_position |= {pplevel: self.data[pplevel][self.strategy_logic.tc[self.strategy_logic.tc_entry]['Index']]}
-            elif level == "LDL":
-                for ldllevel in ['LD_High','LD_Low','LD_Close']:
-                    levels_position |= {ldllevel: self.data[ldllevel][self.strategy_logic.tc[self.strategy_logic.tc_entry]['Index']]}
+                    levels_position[pplevel] = self.data[pplevel][self.strategy_logic.tc[-1]['Index']]
+
             else:
-                levels_position |= {level: self.data[level][self.strategy_logic.tc[self.strategy_logic.tc_entry]['Index']]}
-            
+                levels_position[level] = self.data[level][self.strategy_logic.tc[-1]['Index']]
+
         return levels_position
 
     # Metodo que abre una orden
     def open_new_order(self) -> None:
-        self.order = Order()
-        self.order.newOrder(order_type= self.set_order_type(),
-                            open_price = self.set_order_price(),
-                            open_time  = self.candle.Time + dt.timedelta(minutes = self.setting.instrument.tf),
-                            size = self.setting.trademanagement.size
-        )
+        if self.strategy_logic.orders[-1] is not None:
+            self.order = Order()
+            self.order.newOrder(order_type= self.strategy_logic.orders[-1]['order_type'],
+                                open_price = self.strategy_logic.orders[-1]['open_price'],
+                                open_time  = self.strategy_logic.orders[-1]['open_time'],
+                                size = self.strategy_logic.orders[-1]['size'],
+                                tp = self.strategy_logic.orders[-1]['tp'],
+                                sl = self.strategy_logic.orders[-1]['sl'],
+            )
+            self.order.active = True
+            
         if self.order.order_type == "ExceededRisk":
             self.close_order('canceled')
                                   
@@ -588,21 +561,21 @@ class cCase():
         
     # Metodo que gestiona una orden que ya está puesta
     def manage_order(self)  -> None:
-        if self.candle.Time >= self.order.open_time + dt.timedelta(minutes = (self.setting.trademanagement.wait_candles-1) * self.setting.instrument.tf):
+        wait_minutes = (self.setting.trademanagement.wait_candles-1) * self.setting.instrument.tf if hasattr(self.setting.trademanagement,'wait_candles') else 0
+        if self.candle.Time >= self.order.open_time + dt.timedelta(minutes = wait_minutes):
             self.close_order("canceled")
                       
     # Metodo que comprueba si se dan las condiciones para una nueva entrada
     def check_new_entry(self) -> None:       
         # Buscmaos entrada
-        if self.strategy_logic.checkLogic(self.candle, levels = self.filter_active_main_levels()):
+        if self.strategy_logic.checkLogic(self.candle, levels = self.filter_active_main_levels()):            
             self.open_new_order()
         
     # Méteodo que comprueba si la vela es operable
     def check_tradeable_candle(self):
         return self.setting.timeconstraints.min_hour <= self.candle.Relative_Hour <= self.setting.timeconstraints.max_hour
 
-
-    #Método que crea un obejto result
+    #Método que crea un objeto result
     def get_result(self):
         # Result lo generamos a traves de filter
         self.filter = cFilter(setting = self.setting.to_dict(), 
@@ -625,6 +598,7 @@ class cCase():
             return self.auto_order_type()
         elif self.setting.trademanagement.entry_type == "Invert":
             return self.invert_order_type()
+        #print(f"{self.strategy_logic.tc[self.strategy_logic.tc_entry]['Direction']}  {self.setting.trademanagement.entry_type.replace('Order','')}")
         return self.strategy_logic.tc[self.strategy_logic.tc_entry]['Direction'] + self.setting.trademanagement.entry_type.replace('Order','')
 
     # Método que devuelve el tipo de entrada que se calcula de forma auto
@@ -635,7 +609,7 @@ class cCase():
         auto_entry = self.auto_order_type()
         if auto_entry == "buyMarket":
             return "sellMarket"     
-        elif auto_entry == "sellMarket":
+        elif auto_entry == "sellMarket": 
             return "buyMarket"
         elif auto_entry == "buyStop":
             return "sellLimit"

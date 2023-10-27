@@ -1,9 +1,14 @@
 from typing import List,Optional
+from lib.ClassLogic import Logic
+from lib.ClassOrder import Order
+from lib.ClassCandle import Candle
+from lib.ClassTCCandle import TCCandle
 
-class Reversal():
+class Reversal(Logic):
 
     Index:          int                     # Indice de la vela
     Body:           Optional[int]           # Cuerpo de la vela
+    Range:          Optional[int]           # Rango de la vela
     BR:             Optional[int]           # Relacion cuerpo/rango en %
     HT:             Optional[int]           # Relacion Head/Tail en %
     Gap:            Optional[int]           # Gap entre el MVC y el cuerpo de la vela
@@ -22,6 +27,9 @@ class Reversal():
     
     def to_dict(self) -> dict:
         return dict(self.__dict__.items())
+    
+    def get_Range(self, range: int) -> None:
+        self.Range = range
     
     def get_Body(self, body: int) -> None:
         self.Body = body
@@ -75,6 +83,9 @@ class Reversal():
         else:
             self.entry_price = close
             self.order_type = "MarketOrder"
+
+    
+
         
 
 

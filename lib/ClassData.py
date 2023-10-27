@@ -27,11 +27,13 @@ from models.modelsSetting import Setting
 #------------------------------
 class cDataCandle():
 #---- Constructor
-    def __init__(self,data: pd.DataFrame, setting: dict, load=False, super='case'):
+    def __init__(self,data: pd.DataFrame, setting: dict, super: str='case', load=False, strategy_type: str=None):
 
         if not load:
             self.data = data
             self.setting = Setting(data=setting)
+            self.strategy_type = strategy_type
+
 
 #---- Bloque de Properties para cambiar atributos
 
@@ -42,10 +44,6 @@ class cDataCandle():
     #Método que asigna el dataframe 
     def set_data(self,_value:dict) -> None:
         self.data = pd.DataFrame(_value)
-
-    #Método que devuelve el dataframe data
-    #def Get_Data(self):
-    #    return self.data
 
 #---- Bloque de metodos para la obtención de datos de la vela 
     #Calcula el tipo de DP: 1 alcista -1 bajista 0 doji
@@ -144,7 +142,6 @@ class cDataCandle():
                                         self.data.Session,
                                         self.data.Candle_Session_Index))  
         
-
     #Método para calcular los indicadores
     def get_outchart_indicators(self)-> None:
         if 'cumdelta' in self.setting.indicators.indicators:
@@ -157,7 +154,8 @@ class cDataCandle():
             self.get_ar(self.setting.indicators.atr['period'])
         if 'daily_change' in self.setting.indicators.indicators:
             self.get_daily_change()
-
+        if 'tls' in self.setting.indicators.indicators or self.strategy_type == 'tls':
+            self.get_trappedlongshort()
     #Método que calcula el Rango Medio de las ultimas _period velas
     def get_ar(self, period)-> None:
         self.data['AR']=[int(x) if math.isnan(x)==False else 1 for x in self.data.Range.rolling(window=period).mean()]
@@ -174,6 +172,110 @@ class cDataCandle():
     #Método que calcula el RSI 
     def get_rsi(self, period)-> None:     
         self.data['RSI']=fn.rsi(self.data.Close, int(period))
+
+
+    # Método que calcula los parametros del  Trapped Long Short
+    def get_trappedlongshort(self) -> None:
+        # Mecha superior
+        # Delta total
+        self.data['TLS_Upper_Delta'] = list(map(lambda ask, bid,shadow_upper: 
+                                                fn.shadow_delta(ask,bid,"upper",shadow_upper),
+                                                self.data.Ask,self.data.Bid,self.data.Shadow_Upper))
+        # Volumen total
+        self.data['TLS_Upper_Volume'] = list(map(lambda ask, bid,shadow_lower:
+                                                fn.shadow_volume(ask,bid,"upper",shadow_lower),
+                                                self.data.Ask,self.data.Bid,self.data.Shadow_Lower))
+
+        # Delta porcentual
+        self.data['TLS_Upper_Ask_Percentage'] = list(map(lambda delta, volume: 
+                                                    int(round((delta+volume)/(2 * volume) * 100,0)) if volume!=0 else 0,
+                                                    self.data.TLS_Upper_Delta,self.data.TLS_Upper_Volume))
+        # Porcentaje de niveles delta postivo en mecha superior
+        self.data['TLS_Upper_Ask_Levels_Percentage'] = list(map(lambda ask, bid, shadow_upper:
+                                                            fn.shadow_delta_levels_percentage(ask,bid,"upper",shadow_upper),
+                                                            self.data.Ask,self.data.Bid,self.data.Shadow_Upper))
+
+        #Precio en el que se da el máximo ask en la vela
+        self.data['TLS_Max_Ask_Price'] = list(map(lambda ask, low:
+                                                  fn.max_ask_price(ask,low,self.setting.instrument.ticksize),
+                                                    self.data.Ask,self.data.Low))
+
+        # Si el Max Ask Price esta en la mecha superior ponemos 1, si no 0
+        self.data['TLS_Max_Ask_In_Upper_Shadow'] = list(map(lambda max_ask_price, open, close:
+                                                            max_ask_price>close if open<close else max_ask_price>open,
+                                                            self.data.TLS_Max_Ask_Price,self.data.Open,self.data.Close)) 
+
+        # Mecha inferior
+        # Delta total
+        self.data['TLS_Lower_Delta'] = list(map(lambda ask, bid,shadow_lower:
+                                                fn.shadow_delta(ask,bid,"lower",shadow_lower),
+                                                self.data.Ask,self.data.Bid,self.data.Shadow_Lower))
+        # Volumen total
+        self.data['TLS_Lower_Volume'] = list(map(lambda ask, bid,shadow_lower:
+                                                fn.shadow_volume(ask,bid,"lower",shadow_lower),
+                                                self.data.Ask,self.data.Bid,self.data.Shadow_Lower))
+        # Delta porcentual
+        self.data['TLS_Lower_Bid_Percentage'] = list(map(lambda delta, volume:
+                                                    int(round(((volume-delta) / (2*volume)) * 100,0)) if volume!=0 else 0,
+                                                    self.data.TLS_Lower_Delta,self.data.TLS_Lower_Volume))
+        # Porcentaje de niveles delta negativo en mecha inferior
+        self.data['TLS_Lower_Bid_Levels_Percentage'] = list(map(lambda ask, bid, shadow_lower:
+                                                            fn.shadow_delta_levels_percentage(ask,bid,"lower",shadow_lower),
+                                                            self.data.Ask,self.data.Bid,self.data.Shadow_Lower))
+
+        #Precio en el que se da el max bid en la vela
+        self.data['TLS_Max_Bid_Price'] = list(map(lambda bid, low:
+                                                    fn.max_bid_price(bid,low,self.setting.instrument.ticksize),
+                                                    self.data.Bid,self.data.Low))
+
+
+        # Si el Max Bid Price esta en la mecha inferior ponemos 1, si no 0
+        self.data['TLS_Max_Bid_In_Lower_Shadow'] = list(map(lambda max_bid_price, open, close:
+                                                            max_bid_price<close if open>close else max_bid_price<open,
+                                                            self.data.TLS_Max_Bid_Price,self.data.Open,self.data.Close))
+
+        # Comprobamos si se dan las condiciones de TLS. Si se dan ponemos 1 si hay largos atrapados, -1 si hay cortos, si no 0
+        self.data['TLS_Result'] = list(
+            map(
+                lambda upper_delta, upper_ask_percentage, upper_ask_levels_percentage, max_ask_in_upper_shadow, lower_delta, lower_bid_percentage, lower_bid_levels_percentage, max_bid_in_lower_shadow, candle_type: 1
+                if upper_delta >= self.setting.indicators.tls['upper_delta_min']
+                and upper_ask_percentage>= self.setting.indicators.tls['upper_delta_percentage_min']
+                and upper_ask_levels_percentage >= self.setting.indicators.tls['upper_delta_level_percentage_min']
+                and (
+                    self.setting.indicators.tls['max_delta_shadow'] == False
+                    or max_ask_in_upper_shadow == 1
+                )
+                and (
+                    self.setting.indicators.tls['concordance'] == False
+                    or candle_type != -1
+                )
+                else -1
+                if lower_delta <= self.setting.indicators.tls['lower_delta_max']
+                and lower_bid_percentage >= self.setting.indicators.tls['lower_delta_percentage_min']
+                and lower_bid_levels_percentage >= self.setting.indicators.tls['lower_delta_level_percentage_min']
+                and (
+                    self.setting.indicators.tls['max_delta_shadow'] == False
+                    or max_bid_in_lower_shadow == 1
+                )
+                and (
+                    self.setting.indicators.tls['concordance'] == False
+                    or candle_type != 1
+                )
+                else 0,
+                self.data.TLS_Upper_Delta,
+                self.data.TLS_Upper_Ask_Percentage,
+                self.data.TLS_Upper_Ask_Levels_Percentage,
+                self.data.TLS_Max_Ask_In_Upper_Shadow,
+                self.data.TLS_Lower_Delta,
+                self.data.TLS_Lower_Bid_Percentage,
+                self.data.TLS_Lower_Bid_Levels_Percentage,
+                self.data.TLS_Max_Bid_In_Lower_Shadow,
+                self.data.Candle_Type,
+            )
+        )
+                                         
+
+
 
     #Metodo para lanzar el cálculo de todos los parámetros del bloque de datos de vela
     def calculate_candle_params(self,_initial_market_day)-> None:
@@ -192,7 +294,7 @@ class cDataCandle():
         self.get_head_tail()
         self.get_market_days(_initial_market_day)
         self.get_relative_hour()
-        self.get_tradeable()
+        self.get_tradeable()            
         
 
     def get_indicators(self) -> None:
@@ -263,8 +365,8 @@ class cDataCandle():
                 return "Daily_VWAP"
             elif level_name == "Weekly VWAP":
                 return "Weekly_VWAP"
-            elif level_name == "Last Day Levels":
-                return "LDL"
+            elif level_name == "LD_High" or level_name == "LD_Low" or level_name == "LD_Close":
+                return level_name
             elif level_name == "Current Day Levels":
                 return "CDL"
             elif level_name == "Market Session Levels":
@@ -272,7 +374,7 @@ class cDataCandle():
             else:
                 return level_name
 
-        if len(self.setting.levels.levels) <= 0:
+        if len(self.setting.levels.levels) == 0:
             return
         for _level in self.setting.levels.levels:
             _level = level_name_to_column(_level)
@@ -285,7 +387,7 @@ class cDataCandle():
             elif _level=="CDL":
                 if 'CD_High' not in self.data.columns:
                     self.get_current_day_levels()             
-            elif _level=="LDL":
+            elif _level=="LD_High" or _level=="LD_Low" or _level=="LD_Close":
                 #Si no estan la columnas de niveles del dia actual las creamos
                 if 'CD_High' not in self.data.columns:
                     self.get_current_day_levels()
@@ -319,7 +421,7 @@ class cDataCandle():
                     if 'CDL' not in self.setting.levels.levels:
                         self.data=self.data.drop(['CD_High','CD_Low'],axis=1)
                 self.get_pivot_ponts()
-                if 'LDL' not in self.setting.levels.levels:
+                if 'LD_High' not in self.setting.levels.levels:
                     self.data=self.data.drop(['LD_High','LD_Low','LD_Close'],axis=1)
        
 

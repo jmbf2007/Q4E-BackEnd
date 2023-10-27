@@ -1,14 +1,17 @@
 import sys
 sys.path.append("..")
 
+
 from main import app,DB
 
-from models.models import Model
+from models.models import Model, Strategy
 from functions.functions_api import get_document_info, get_market_data, get_parameter_behavior
 from models.modelsSetting import Setting
 from lib.ClassData import cDataCandle
 from lib.ClassCase import cCase
 from lib.ClassParametricAnalysis import cParametric
+from bson import ObjectId
+
 
 
 
@@ -88,10 +91,6 @@ async def run_parametric_analysis(model: Model, param: dict) -> dict:
     # Creamos el objeto param
     parametric = cParametric(parameters=param)
 
-    # Tuplas con los comportamientos de los parameteros 1 y 2
-    #behavior1 = PARAMETERS_BEHAVIOR[parametric.parameters.param1_name]
-    #behavior2 = PARAMETERS_BEHAVIOR[parametric.parameters.param2_name]
-
     behavior1 = get_parameter_behavior(model.objectID, parametric.parameters.param1_name)
     behavior2 = get_parameter_behavior(model.objectID, parametric.parameters.param2_name)
 
@@ -110,13 +109,16 @@ async def run_parametric_analysis(model: Model, param: dict) -> dict:
                 parametric.initialize_dataframes()
 
             temp_data.Calculate_Model()
+
             #Creamos el objeto case 
-            temp_case = cCase(data=data_df, 
-                              setting=temp_data.setting.to_dict(), 
-                              m1data = data_m1, 
-                              tc_assumptions = strategy_info['tc_assumptions'],
-                              strategy_settings = strategy_info['settings'],
-                              strategy_type = strategy_info['strategy_type']) 
+            temp_case = cCase(
+                data=temp_data.data, 
+                setting=temp_data.setting.to_dict(), 
+                m1data = data_m1, 
+                tc_assumptions = strategy_info['tc_assumptions'],
+                strategy_settings = strategy_info['settings'],
+                strategy_type = strategy_info['strategy_type']
+            ) 
 
             # Resolvemos
             for day in set(temp_case.data.Market_Day):
@@ -163,29 +165,30 @@ async def run_parametric_analysis(model: Model, param: dict) -> dict:
 
 
 @app.get('/get_parametric_default_parameters/')
-async def get_parametric_default_parameters(model: Model) -> list:
-    # Esta funcion devuelve los parámetros que están seleccionados como default en los settings de la estrategia
-    strategy_id = DB.db['models'].find_one({'_id': model.objectID})['strategy_id']
-    strategy_settings = DB.db['strategies'].find_one({'_id': strategy_id})['settings']
-    default = []
-    for collection in list(strategy_settings.keys()):
-        for param_object in strategy_settings[collection]:            
-            if 'parametric' in param_object.keys():
-                if param_object['parametric']['active']:
-                    if 'default' in list(param_object['parametric'].keys()) and param_object['parametric']['default']:
-                        default.append(param_object['name'])
-        #default.extend(param_object['name'] for param_object in strategy_settings[collection] if 'parametric' in param_object.keys() and param_object['parametric']['active'] and param_object['parametric']['default'])
-
-    return {'result': default}
+async def get_parametric_default_parameters(strategy: Strategy) -> dict:
+    try:
+        # Esta funcion devuelve los parámetros que están seleccionados como default en los settings de la estrategia
+        strategy_settings = DB.db['strategies'].find_one({'_id': strategy.objectID})['settings']
+        default = []
+        for collection in list(strategy_settings.keys()):
+            for param_object in strategy_settings[collection]:                    
+                if 'parametric' in list(param_object.keys()):
+                    if param_object['parametric']['active']:
+                        if 'default' in list(param_object['parametric'].keys()) and param_object['parametric']['default']:
+                            default.append(param_object['name'])
+            #default.extend(param_object['name'] for param_object in strategy_settings[collection] if 'parametric' in param_object.keys() and param_object['parametric']['active'] and param_object['parametric']['default'])
+        return {'result': default}
+    except Exception as e:
+        return {'result': 'Error'}
 
 @app.get('/get_available_parameters/')
-async def get_available_parameters(model: Model) -> list:
+async def get_available_parameters(model: Model) -> dict:
     # Esta funcion devuelve los parámetros que están seleccionados como default en los settings de la estrategia
     strategy_id = DB.db['models'].find_one({'_id': model.objectID})['strategy_id']
     strategy_settings = DB.db['strategies'].find_one({'_id': strategy_id})['settings']
     available = []
     for collection in list(strategy_settings.keys()):
         for param_object in strategy_settings[collection]:           
-            if 'parametric' in list(param_object.keys()) and param_object['parametric']['active']:
+            if 'parametric' in list(param_object.keys()) and param_object['parametric']['active'] and param_object['hidden']==False:
                 available.append(param_object['name'])
     return {'result': available}

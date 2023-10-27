@@ -97,7 +97,7 @@ def store_dataframe(df: pd.DataFrame, collection: str, super: str,model_id: Obje
     # Actualizamos el documento matriz
     DB.db[collection].update_one({'model_id': model_id, 'super': super},{'$set': {'chunks':chunks_id}})
 
-def get_market_data(ticker: str, tf: int, start_date: int, end_date: int)-> pd.DataFrame:
+def get_market_data(ticker: str, tf: int, start_date: int, end_date: int, of_active: bool=False)-> pd.DataFrame:
     #Datos 
     database = ticker
     collection = f'{tf}M'
@@ -107,7 +107,10 @@ def get_market_data(ticker: str, tf: int, start_date: int, end_date: int)-> pd.D
     document = MD.client[database][collection].find({'Time': {"$gte": start_date, "$lt": end_date}})
     # Convertimos a df
     df = pd.DataFrame(list(document))
-    df = df.drop(['_id','Ask','Bid'],axis=1)
+    # Eliminamos las columnas que no nos interesan
+    df = df.drop(['_id'],axis=1)
+    if of_active==False:
+        df = df.drop(['Ask','Bid'],axis=1)
     # Eliminamos las filas iniciales hasta que tengamos una nueva session de mercado
     for i,_new in zip(df.index,df.NewSession):
         if _new==True:                

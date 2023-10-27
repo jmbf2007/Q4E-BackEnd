@@ -296,25 +296,25 @@ async def get_wfa_dailysummary_piechart(model: Model) -> dict:
     }
 
 @app.get('/get_wfa_default_parameters/')
-async def get_wfa_default_parameters(model: Model) -> list:
+async def get_wfa_default_parameters(model: Model) -> dict:
     # Esta funcion devuelve los parámetros que están seleccionados como default en los settings de la estrategia
     strategy_id = DB.db['models'].find_one({'_id': model.objectID})['strategy_id']
     strategy_settings = DB.db['strategies'].find_one({'_id': strategy_id})['settings']
     default = []
     for collection in list(strategy_settings.keys()):
-        default.extend(param_object['name'] for param_object in strategy_settings[collection] if 'wfa' in param_object.keys() and param_object['wfa']['active'] and param_object['wfa']['default'])
+        default.extend(param_object['name'] for param_object in strategy_settings[collection] if 'wfa' in param_object.keys() and param_object['wfa']['active'] and param_object['wfa']['default'] and param_object['hidden']==False)
 
     return {'result': default}
 
 
 @app.get('/get_wfa_available_parameters/')
-async def get_wfa_available_parameters(model: Model) -> dict:
+async def get_wfa_available_parameters(model: Model) -> dict:    
     strategy_id = DB.db['models'].find_one({'_id': model.objectID})['strategy_id']
     strategy_settings = DB.db['strategies'].find_one({'_id': strategy_id})['settings']
     available_parameters = {}
     for collection in list(strategy_settings.keys()):
         for param_object in strategy_settings[collection]:
-            if 'wfa' in param_object.keys() and param_object['wfa']['active']:
+            if 'wfa' in param_object.keys() and param_object['wfa']['active'] and param_object['hidden']==False:
                 available_parameters[param_object['name']] = param_object['value']
 
     return {'result': available_parameters}

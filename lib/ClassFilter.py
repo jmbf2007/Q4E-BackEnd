@@ -48,47 +48,49 @@ class cFilter():
         if strategy_type is not None:
             self.strategy_type = strategy_type
 
-#---- Bloque de properties
-    def set_tp(self,_value):
-        self.filter_setting.trademanagement.tp = _value
-
-    def set_sl(self,_value):
-        self.filter_setting.trademanagement.sl = _value
-
 #---- Bloque para los metodos de la clase
     # Metodo para filtrar por los parametros del nivel principal y por la vela del toque
     def apply_strategy_parameters_filter(self, filter_list: list) -> list:
-        _filter = filter_list               # lista con los datos de las posiciones a filtrar
-        for attb in self.strategy_settings['strategyparameters']:
-            if attb['filter']['active']:
-                print(f'**** Aplicando filtro {attb["value"]} ****')
-                name=attb['value']
-                value = self.filter_setting.strategyparameters.__dict__[attb['value']]
-                if attb['filter']['criteria']=='>=':     
-                    if self.filter_setting.strategyparameters.__dict__[attb['value']] is not None:
-                        if attb['filter']['candle']=="tc":
-                            _filter = [x for x in _filter if self.tc[x['tc_list_index']][attb['filter']['column']] >=  self.filter_setting.strategyparameters.__dict__[attb['value']] ]
-                        else:
-                            _temp = []
+        def criteria_filter(attb_value, filter_value, criteria)-> bool:
+            if criteria=='>=':
+                return attb_value >= filter_value
+            elif criteria=='<=':
+                return attb_value <= filter_value
+            elif criteria=='==':
+                return attb_value == filter_value
+            elif criteria=='!=':
+                return attb_value != filter_value
+            elif criteria=='>':
+                return attb_value > filter_value
+            elif criteria=='<':
+                return attb_value < filter_value
+            else:
+                return False
 
-                            for x in _filter:
-                                if self.data_candle[str(x['level_index'])][attb['filter']['column']] >=  self.filter_setting.strategyparameters.__dict__[attb['value']] :
-                                    _temp.append(x)
-                            #_filter = [x for x in _filter if self.data_candle[str(x['level_index'])][attb['filter']['column']] >=  self.filter_setting.strategyparameters.__dict__[attb['value']] ] if self.strategy_type=='level+tc' else _filter
-                        print(f'Despues de aplicar criterio  {name} >= {value} : {len(_filter)}')
+        _filter = filter_list                                                                   # lista con los datos de las posiciones a filtrar
+        for attb in self.strategy_settings['strategyparameters']:                               # Recorremos los atributos de la estrategia
+            if attb['filter']['active']:                                                        # Si el atributo tiene filtro activo
+                
+                attb_name=attb['value']                                                         # Nombre del atributo a filtrar
+                filter_value = self.filter_setting.strategyparameters.__dict__[attb['value']]   # Valor del filtro modficado por el usuario
 
-                elif ['criteria']=='<=':
-                    if self.filter_setting.strategyparameters.__dict__[attb['value']] is not None:
-                        if attb['filter']['candle']=="tc":
-                            _filter = [x for x in _filter if self.tc[x['tc_list_index']][attb['filter']['column']] <=  self.filter_setting.strategyparameters.__dict__[attb['value']] ]
-                        else:
-                            _filter = [x for x in _filter if self.data_candle[str(x['level_index'])][attb['filter']['column']] <=  self.filter_setting.strategyparameters.__dict__[attb['value']] ]
-                        print(f'Despues de aplicar criterio {name} <= {value} : {len(_filter)}')
+                if self.filter_setting.strategyparameters.__dict__[attb_name] is None:          # Nos aseguramos de que no hay un error de valor None en el valor a filtar
+                    continue
+
+                #print(f'**** Aplicando filtro {attb_name} ****')
+                #print(f'Posiciones antes de aplicar el filtro: {len(_filter)}')
+                     
+                if attb['filter']['candle']=="tc":                                              # Si el filtro se aplica a la vela del toque  
+                    _filter = [x for x in _filter if criteria_filter(self.tc[x['tc_list_index']][attb['filter']['column']], filter_value, attb['filter']['criteria'])]        
+                else:                                                                           # Si el filtro se aplica a la vela del nivel
+                    _filter = [x for x in _filter if criteria_filter(self.data_candle[str(x['level_index'])][attb['filter']['column']],filter_value, attb['filter']['criteria'])] 
+                #print(f'Posiciones despues de aplicar criterio  {attb_name} >= {filter_value} : {len(_filter)}')
+
         return _filter
-
 
     # Método para filtrar por el Daily Change
     def apply_daily_change_filter(self, filter_list: list) -> list:
+        """
         filter_buy = [
             x for x in filter_list if x['trade_type']=='buy' and x['tc']['Daily_Change'] >= self.filter_setting.levels.LDL['buy_min'] \
                 and  x['tc']['Daily_Change'] < self.filter_setting.levels.LDL['buy_max']
@@ -107,22 +109,27 @@ class cFilter():
             _filter = filter_sell  
             
         return _filter
+        """
+        pass
     
     # Método para filtrar por el Sesion VWAP
     def apply_session_vwap_filter(self, filter_list: list) -> list:
-        if self.filter_setting.levels.Session_VWAP['buy_only_above']:
-            filter_buy = [ x for x in filter_list if x['trade_type']=='buy' and self.condition(x['tc'],x['open_price'],'Session_VWAP','>= 0') ]               
-        elif self.filter_setting.levels.Session_VWAP['buy_only_below']:
-            filter_buy = [ x for x in filter_list if x['trade_type']=='buy' and self.condition(x['tc'],x['open_price'],'Session_VWAP','< 0')]
+        if 'buy_only_above' in self.filter_setting.levels.Session_VWAP.keys() and self.filter_setting.levels.Session_VWAP['buy_only_above']:
+            filter_buy = [ x for x in filter_list if x['trade_type']=='buy' and self.condition(x['tc'],x['open_price'],'Session_VWAP','>=') ]               
+            print(f'Filtro de compra solo por encima de la VWAP de la sesión. Coincidencias: {len(filter_buy)}')
+        elif 'buy_only_below' in self.filter_setting.levels.Session_VWAP.keys() and self.filter_setting.levels.Session_VWAP['buy_only_below']:
+            filter_buy = [ x for x in filter_list if x['trade_type']=='buy' and self.condition(x['tc'],x['open_price'],'Session_VWAP','<')]
+            print(f'Filtro de compra solo por debajo de la VWAP de la sesión. Coincidencias: {len(filter_buy)}')
         else:
             filter_buy = [ x for x in filter_list if x['trade_type']=='buy' ]
 
         
-        if self.filter_setting.levels.Session_VWAP['sell_only_above']:
-            filter_sell =  [ x for x in filter_list if x['trade_type']=='sell' and self.condition(x['tc'],x['open_price'],'Session_VWAP','>= 0') ]  
-
-        elif self.filter_setting.levels.Session_VWAP['sell_only_below']:
-            filter_sell = [ x for x in filter_list if x['trade_type']=='sell' and self.condition(x['tc'],x['open_price'],'Session_VWAP','< 0')]
+        if 'sell_only_above' in self.filter_setting.levels.Session_VWAP.keys() and self.filter_setting.levels.Session_VWAP['sell_only_above']:
+            filter_sell =  [ x for x in filter_list if x['trade_type']=='sell' and self.condition(x['tc'],x['open_price'],'Session_VWAP','>=') ]  
+            print(f'Filtro de venta solo por encima de la VWAP de la sesión. Coincidencias: {len(filter_sell)}')
+        elif 'sell_only_below' in self.filter_setting.levels.Session_VWAP and self.filter_setting.levels.Session_VWAP['sell_only_below']:
+            filter_sell = [ x for x in filter_list if x['trade_type']=='sell' and self.condition(x['tc'],x['open_price'],'Session_VWAP','<')]
+            print(f'Filtro de venta solo por debajo de la VWAP de la sesión. Coincidencias: {len(filter_sell)}')
         else:
             filter_sell =[ x for x in filter_list if x['trade_type']=='sell' ]
     
@@ -130,6 +137,28 @@ class cFilter():
 
         return sorted(_filter,key=lambda i: i['close_time']) 
     
+    #Metodo para filtrar por el Last Day Levels
+    def apply_last_day_levels_filter(self, level: str, filter_list: list) -> list:
+        """
+        level: Nivel sobre el que se aplica el filtro: LD_High, LD_Low, LD_Close
+        """
+        filter_buy = self.partial_filter(filter_list, 'buy_only_above', level, 'buy', '>=')
+        filter_buy = self.partial_filter(filter_list, 'buy_only_below', level, 'buy', '<')
+        filter_sell = self.partial_filter(filter_list, 'sell_only_above', level, 'sell', '>=')
+        filter_sell = self.partial_filter(filter_list, 'sell_only_below', level, 'sell', '<')
+  
+       
+        _filter = filter_buy + filter_sell
+
+        return sorted(_filter,key=lambda i: i['close_time'])    
+        
+    def partial_filter(self, filter_list: list, condition: str, level: str, direction: str, logic: str) -> list:
+        if condition in self.filter_setting.levels.__dict__[level].keys() and self.filter_setting.levels.__dict__[level][condition]:
+            _filter = [ x for x in filter_list if x['trade_type']==direction and self.condition(x['tc'],x['open_price'],level,logic) ]
+            print(f'Filtro de {direction} solo por {logic} de {level}. Coincidencias: {len(_filter)}')
+            return _filter
+        return [ x for x in filter_list if x['trade_type']==direction ]
+            
     def condition(self, index: int, price: float, column: str, logic: str):
         if logic == '>=':
             return price >= self.data_candle[str(index)][column]
@@ -243,14 +272,21 @@ class cFilter():
     # Método que aplica los filtros de los limites diarios de balance
     def apply_daily_balance_limit_filter(self, filter_list: list) -> list:
         #Generator para el balance diario
-        def DailyBalance(_result, _marketdays, _tickvalue, _size, _fee):
+        def DailyBalance(_result, _marketdays):
+            """
+            Generador que devuelve el balance diario
+            Args:   _result: Lista con los resultados en cash de las posiciones
+                    _marketdays: Lista con los dias de mercado de las posiciones
+            Returns: _dailybalance: Balance diario
+            """
             _dailybalance=0
             _day=0
             for _res, _md in zip(_result,_marketdays):
+
                 if _md!=_day:
                     _day = _md
                     _dailybalance = 0
-                _dailybalance += _res*_size*_tickvalue -_fee*_size
+                _dailybalance += _res
                 yield _dailybalance
         
         #Generator para chequear los tp y sl diarios
@@ -273,12 +309,17 @@ class cFilter():
                     _reached = True
                 yield _reached
 
+        # Creamos un dataframe con los datos de las posiciones
+        _filter = pd.DataFrame(filter_list)
 
-        _filter['daily_balance']=list(DailyBalance(_filter.ST1_Result,_filter.TC_Market_Day,self.filter_setting.instrument.tickvalue,
-                                                    self.filter_setting.trademanagement.size,self.filter_setting.account.fee))
-        _filter['daily_reached']=list(Check_Daily_Balance(_filter.daily_balance,_filter.TC_Market_Day,self.filter_setting.account.daily_take_profit, self.filter_setting.account.daily_stop_loss))
+        # Generamos la columna con el balance diario 
+        _filter['daily_balance']=list(DailyBalance(_filter.cash_result,_filter.market_day))
+
+        _filter['daily_reached']=list(Check_Daily_Balance(_filter.daily_balance,_filter.market_day,self.filter_setting.account.daily_take_profit, self.filter_setting.account.daily_stop_loss))
+        
         _delete_rows = _filter[_filter.daily_reached==True].index
         _filter = _filter.drop(_delete_rows,axis=0)
+        return _filter.to_dict(orient='records')
       
     #Funcion que aplica los filtros y almacena el dataframe filtrado
     def get_filtered_data(self, positions: list) -> None: 
@@ -292,9 +333,9 @@ class cFilter():
         print(f'Positions antes de todos los filtros: {len(_filter)} \n')
 
      #Filtros de los Parametros de la Estregia 
-        print(f'Positions antes de los filtros de los parametros de la  estrategia: {len(_filter)}')
+        #print(f'Positions antes de los filtros de los parametros de la  estrategia: {len(_filter)}')
         _filter = self.apply_strategy_parameters_filter(filter_list=_filter)
-        print(f'Positions despues de los filtros de los parametros de la  estrategia: {len(_filter)} \n')
+        #print(f'Positions despues de los filtros de los parametros de la  estrategia: {len(_filter)} \n')
     
         
      #Filtros de niveles
@@ -303,67 +344,82 @@ class cFilter():
 
      #Filtro del VWAP   
         if 'Session_VWAP' in self.filter_setting.levels.levels:
-            print(f'Positions antes de los filtros del nivel VWAP: {len(_filter)}')
+            #print(f'Positions antes de los filtros del nivel VWAP: {len(_filter)}')
             _filter = self.apply_session_vwap_filter(filter_list=_filter)
-            print(f'Positions despues de los filtros del nivel VWAP: {len(_filter)} \n')
+            #print(f'Positions despues de los filtros del nivel VWAP: {len(_filter)} \n')
         
      # Filtro de los PP
         if 'pp' in self.filter_setting.levels.levels:
-            print(f'Positions antes de los filtros del nivel PP: {len(_filter)}')
+            #print(f'Positions antes de los filtros del nivel PP: {len(_filter)}')
             _filter = self.apply_pivot_points_filter(filter_list=_filter)
-            print(f'Positions despues de los filtros del nivel PP: {len(_filter)} \n')
+            #print(f'Positions despues de los filtros del nivel PP: {len(_filter)} \n')
+        
+    #Filtros de los Last Day Levels
+        if 'LD_High' in self.filter_setting.levels.levels:
+            #print(f'Positions antes de los filtros del nivel LD_High: {len(_filter)}')
+            _filter = self.apply_last_day_levels_filter(level='LD_High', filter_list=_filter)
+            #print(f'Positions despues de los filtros del nivel LD_High: {len(_filter)} \n')
+        
+        if 'LD_Low' in self.filter_setting.levels.levels:
+            #print(f'Positions antes de los filtros del nivel LD_Low: {len(_filter)}')
+            _filter = self.apply_last_day_levels_filter(level='LD_Low', filter_list=_filter)
+            #print(f'Positions despues de los filtros del nivel LD_Low: {len(_filter)} \n')
+        
+        if 'LD_Close' in self.filter_setting.levels.levels:
+            #print(f'Positions antes de los filtros del nivel LD_Close: {len(_filter)}')
+            _filter = self.apply_last_day_levels_filter(level='LD_Close', filter_list=_filter)
+            #print(f'Positions despues de los filtros del nivel LD_Close: {len(_filter)} \n')
             
      #Filtros de las sessiones de mercado
         if hasattr(self.filter_setting.timeconstraints,'ms_origin') and self.filter_setting.timeconstraints.ms_origin != 'All Sessions' and self.filter_setting.timeconstraints.ms_origin is not None:
-            print(f'Positions antes de los filtros de la sesion de mercado para la vela origen: {len(_filter)}')
+            #print(f'Positions antes de los filtros de la sesion de mercado para la vela origen: {len(_filter)}')
             _filter = self.apply_market_sessions_filter(filter_list=_filter, candle='level')
-            print(f'Positions despues de los filtros de la sesion de mercado para la vela origen: {len(_filter)} \n')
+            #print(f'Positions despues de los filtros de la sesion de mercado para la vela origen: {len(_filter)} \n')
             
         if hasattr(self.filter_setting.timeconstraints,'ms_level') and self.filter_setting.timeconstraints.ms_tc != 'All Sessions' and self.filter_setting.timeconstraints.ms_tc is not None:
-            print(f'Positions antes de los filtros de la session de mercado para la vela tc: {len(_filter)}')
+            #print(f'Positions antes de los filtros de la session de mercado para la vela tc: {len(_filter)}')
             _filter = self.apply_market_sessions_filter(filter_list=_filter, candle="tc")
-            print(f'Positions despues de los filtros de la session de mercado para la vela tc: {len(_filter)} \n')
+            #print(f'Positions despues de los filtros de la session de mercado para la vela tc: {len(_filter)} \n')
 
      #Filtros para el rango horario
-        print(f'Positions antes de los filtros para el rango horario: {len(_filter)} ')
+        #print(f'Positions antes de los filtros para el rango horario: {len(_filter)} ')
         _filter = self.apply_relative_hour_filter(filter_list= _filter)
-        print(f'Positions despues de los filtros para el rango horario: {len(_filter)} \n')
+        #print(f'Positions despues de los filtros para el rango horario: {len(_filter)} \n')
 
      #Filtros de Indicadores
        #Filtros de RSI
         if 'rsi' in self.filter_setting.indicators.indicators and self.filter_setting.indicators.rsi['included']:
-            print(f'Positions antes de los filtros para el inidcador RSI: {len(_filter)}')
+            #print(f'Positions antes de los filtros para el inidcador RSI: {len(_filter)}')
             _filter = self.apply_rsi_filter(filter_list=_filter)
-            print(f'Positions despues de los filtros para el inidcador RSI: {len(_filter)} \n')
+            #print(f'Positions despues de los filtros para el inidcador RSI: {len(_filter)} \n')
             
        #Filtro del ATR
         if 'atr' in self.filter_setting.indicators.indicators and self.filter_setting.indicators.atr['included']:
-            print(f'Positions antes de los filtros para el inidcador ATR: {len(_filter)}')
+            #print(f'Positions antes de los filtros para el inidcador ATR: {len(_filter)}')
             _filter = self.apply_atr_filter(filter_list=_filter)
-            print(f'Positions despues de los filtros para el inidcador ATR: {len(_filter)} \n')
+            #print(f'Positions despues de los filtros para el inidcador ATR: {len(_filter)} \n')
        #Filtro del Rango Medio 
-        if 'ar' in self.filter_setting.indicators.indicators and self.filter_setting.indicators.indicators.ar['included']:
-            print(f'Positions antes de los filtros para el inidcador AR: {len(_filter)}')
+        if 'ar' in self.filter_setting.indicators.indicators and self.filter_setting.indicators.ar['included']:
+            #print(f'Positions antes de los filtros para el inidcador AR: {len(_filter)}')
             _filter = self.apply_ar_filter(filter_list=_filter)
-            print(f'Positions despues de los filtros para el inidcador AR: {len(_filter)} \n')
+            #print(f'Positions despues de los filtros para el inidcador AR: {len(_filter)} \n')
         #Filtro de daily_change
-        if 'daily_change' in self.filter_setting.indicators.indicators and self.filter_setting.indicators.indicators.daily_change['included']:
-            print(f'Positions antes de los filtros del Daily Change: {len(_filter)}')
+        if 'daily_change' in self.filter_setting.indicators.indicators and self.filter_setting.indicators.daily_change['included']:
+            #print(f'Positions antes de los filtros del Daily Change: {len(_filter)}')
             _filter = self.apply_daily_change_filter(filter_list=_filter)
-            print(f'Positions despues de los filtros del Daily Change: {len(_filter)} \n')    
+            #print(f'Positions despues de los filtros del Daily Change: {len(_filter)} \n')    
 
      #Filtros de la Gestion de la Cuenta
         if self.filter_setting.account.limited_daily_balance:
-            print(f'Positions antes de los filtros para el limite del daily balance: {len(_filter)}')
+            #print(f'Positions antes de los filtros para el limite del daily balance: {len(_filter)}')
             _filter = self.apply_daily_balance_limit_filter(filter_list=_filter)
-            print(f'Positions despues de los filtros para el limite del daily balance: {len(_filter)} \n')
+            #print(f'Positions despues de los filtros para el limite del daily balance: {len(_filter)} \n')
             
 
      #Ordenamos los trades y lo almacenamos 
         self.filter_case = _filter
         print(f'Desspues de todos los filtros nos quedan {len(self.filter_case)}')
 
-    
     #TODO Esto hay que cambiarlo todo, vamos a intentar no tener pd.Dataframe
     #Funcion que devuelve informacion sobre los trades buy y sell sobre y bajo un nivel
     def above_below_level_info(self, level)-> list:
@@ -409,15 +465,9 @@ class cFilter():
         else:
             return sum(pos['trade_type'] == trade_type and pos['open_price'] <= pos['levels'][level] and pos['trade_result'] in ['loss','ploss'] for pos in self.filter_case) 
 
-
     # Función que calcula el objeto resultado con los filtros 
     def get_filter_result(self):
-        # cuando se lee de la base de datos el indice de self.data_candle es un str pero cuando se ejecuta un nuevo analisis el indice del dict es un int
-        # Esto es un parche , hay que cambiarlo
-        #if isinstance(list(self.data_candle.keys())[0],int):
-        #    interval_days = [self.tc[x['tc_list_index']]['Market_Day'] - self.data_candle[x['level_index']]['Market_Day'] for x in self.filter_case] 
-        #else:
-        #    interval_days = [self.tc[x['tc_list_index']]['Market_Day'] - self.data_candle[str(x['level_index'])]['Market_Day'] for x in self.filter_case] 
+
         data = {
             'open_time':    [x['open_time'] for x in self.filter_case],
             'open_price':   [x['open_price'] for x in self.filter_case],
@@ -435,11 +485,36 @@ class cFilter():
 
         self.result = cResult(setting = self.filter_setting.to_dict(), data = data) 
 
-
     # Método de devuelve una lista con los datos para el calculo del option de la grafica del parametro que se le pase. El parametro es de la vela del nivel que provoca la posicion
-    def get_data_level_for_option(self, parameter: str) ->list:
-        return [{parameter: self.data_candle[str(x['level_index'])][parameter], 'tick_result': x['tick_result']} for x in self.filter_case]
+    def get_data_level_for_option(self, parameter: str) ->list:        
+        return [{parameter: self.data_candle[str(x['level_index'])][parameter], 'tick_result': x['tick_result'], 'trade_type': x['trade_type']} for x in self.filter_case]
     
     # Método de devuelve una lista con los datos para el calculo del option de la grafica del parametro que se le pase. El parametro es de la vela del nivel que provoca la posicion
     def get_data_tc_for_option(self, parameter: str) ->list:
-        return [{parameter: self.tc[x['tc_list_index']][parameter], 'tick_result': x['tick_result']} for x in self.filter_case]
+        return [{parameter: self.tc[x['tc_list_index']][parameter], 'tick_result': x['tick_result'], 'trade_type': x['trade_type']} for x in self.filter_case]
+    
+    # Método de devuelve una lista con los datos para el calculo del option de la grafica del parametro que se le pase. El parametro es de la vela del nivel que provoca la posicion
+    def get_data_tc_for_option_multiparameter(self, parameters: list) -> list:
+        _list = []
+        for x in self.filter_case:
+            _dicc = {
+                parameter: self.tc[x['tc_list_index']][parameter]
+                for parameter in parameters
+            }
+            _dicc['tick_result'] = x['tick_result']
+            _dicc['trade_type'] = x['trade_type']
+            _list.append(_dicc)
+
+        return _list
+
+
+    # Metodo que devuelve la informacion de los niveles tocados
+    def get_touched_levels_info(self) -> list:
+        if len(self.filter_setting.levels.levels)==0:
+            return []
+        touched_levels = []
+        for i,level in enumerate(self.filter_setting.levels.levels): 
+            touched_level_win =  sum(pos['trade_result']=='win' and list(self.tc[pos['tc_list_index']]['touched_level'][i].values())[0] for pos in self.filter_case) 
+            touched_level_loss = sum(pos['trade_result']=='loss' and list(self.tc[pos['tc_list_index']]['touched_level'][i].values())[0] for pos in self.filter_case) 
+            touched_levels.append({'level':level,'touched': touched_level_win+touched_level_loss,'touched_win':touched_level_win,'touched_loss':touched_level_loss})
+        return touched_levels

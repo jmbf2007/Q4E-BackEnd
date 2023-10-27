@@ -170,7 +170,7 @@ def candle_shadow_up(type, open, high, close, ticksize: float) -> int:
     Returns:
         [int]: Valor en ticks de la mecha superior
     """   
-    return ((high-close)/ticksize)  if type==1 else ((high-open)/ticksize)    
+    return int((high-close)/ticksize)  if type==1 else int((high-open)/ticksize)    
 
 def candle_shadow_down(type, open, low, close, ticksize: float) -> int:
     """Funcion que devuelve el valor en tick de la mecha inferior de una vela
@@ -185,7 +185,7 @@ def candle_shadow_down(type, open, low, close, ticksize: float) -> int:
     Returns:
         [int]: Valor en ticks de la mecha inferior
     """   
-    return ((open-low)/ticksize) if type==1 else ((close-low)/ticksize)     
+    return int((open-low)/ticksize) if type==1 else int((close-low)/ticksize)     
 
 def candle_head_tail(shadow_up,shadow_down, candle_type) -> int:
     """Funcion que devuelve la relacion entre cabeza y cola de una vela
@@ -618,3 +618,34 @@ def market_session_level(_new,_levels,_session,_type,_marketsession)-> float:
                 if _l<=_level:
                     _level=_l
         yield _level
+
+# Funciones para el calculo del  Trapped Long Short 
+def shadow_delta(ask: list, bid: list, shadow: str, shadow_lenght: int) -> list:
+    if shadow == "upper":
+        return sum(ask[i] - bid[i] for i in range(shadow_lenght))
+    else:
+        return sum(ask[-1-i] - bid[-1-i] for i in range(shadow_lenght))
+
+
+def shadow_volume(ask: list, bid: list, shadow: str, shadow_lenght: int) -> list:
+    if shadow == "upper":
+        return sum(ask[i] + bid[i] for i in range(shadow_lenght))
+    else:
+        return sum(ask[-1-i] + bid[-1-i] for i in range(shadow_lenght))
+
+
+def shadow_delta_levels_percentage(ask: list, bid: list, shadow: str, shadow_lenght:int) -> int:
+
+    if shadow == "upper":
+        _list = [1 for i in range(shadow_lenght) if (ask[i]-bid[i])>0]
+    else: 
+        _list = [1 for i in range(shadow_lenght) if (ask[-1-i]-bid[-1-i])<0]
+
+    return int(round((sum(_list) / shadow_lenght) * 100,0)) if shadow_lenght > 0 else 0
+
+def max_ask_price(ask: list, Low: float, ticksize: float) -> float:
+    return Low + (ask.index(max(ask))*ticksize)
+
+def max_bid_price(bid: list, Low: float, ticksize: float) -> float:
+    return Low + (bid.index(max(bid))*ticksize)
+

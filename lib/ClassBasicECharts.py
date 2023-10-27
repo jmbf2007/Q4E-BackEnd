@@ -72,20 +72,22 @@ class BasicEChart():
         ]
 
         
-    def yAxis(self) -> list:
+    def yAxis(self, yAxis_zero: bool) -> list:
         _yAxis = []
         for i,yname in enumerate(self.data['yaxis_name']):
             _yAxis.append(
                 {        
                     "type": "value",
                     "name": yname,
-                    "min": self.ymin[i],
+                    "min": self.ymin[i] if not yAxis_zero else 0,
                     "max": self.ymax[i],
+                    "scale": False,
                     "axisLine": {
                         "show": True,
                         "lineStyle": {
                             "color": "black"
-                        }
+                        },
+                        "onZero": yAxis_zero
                     }       
                 }        
             )
@@ -95,8 +97,11 @@ class BasicEChart():
     def xAxis(self) -> list:
         return {
             "type": "category",
-            "boundaryGap": False,
+            "boundaryGap": True,
             "data": self.data['xaxis_data'],
+            "axisTick": {
+                "interval": "auto"
+            },
             "name": self.data['xaxis_title'],
             "nameLocation": "center",
             "nameTextStyle": {
@@ -106,7 +111,7 @@ class BasicEChart():
             }          
         }
     
-    def series(self) -> list:
+    def series(self,show_label: bool) -> list:
         _serie =[]
         for ydata, tname, yaxis, type, colordata, coloured, scatter  in zip(self.data['yaxis_data'], self.data['traces_name'], self.data['yaxis_traces'], self.data['traces_type'], 
                                                     self.data['color_data'], self.data['coloured_traces'], self.data['scatter_data']) :
@@ -124,7 +129,11 @@ class BasicEChart():
                     "type": type,
                     "data": _data,   
                     "smooth": True,
-                    "yAxisIndex": yaxis,    
+                    "yAxisIndex": yaxis, 
+                    "label": {
+                        "show": show_label,
+                        "position": "inside",
+                    },
                 }           
             )
         return _serie
@@ -134,13 +143,13 @@ class BasicEChart():
             "data": self.data['traces_name']
         }
     
-    def getOption(self)-> dict:
+    def getOption(self, yAxis_zero: bool=False, show_label: bool=True)-> dict:
         return {
             "tooltip":  self.tooltip(),
             "legend":   self.legend(),
             "grid":     self.grid(),
             "xAxis":    self.xAxis(),
-            "yAxis":    self.yAxis(),
-            "series":   self.series(),
+            "yAxis":    self.yAxis(yAxis_zero),
+            "series":   self.series(show_label),
             #"visualMap": self.visualMap()       
         }    

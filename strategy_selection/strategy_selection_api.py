@@ -11,18 +11,24 @@ MODEL_COLLECTIONS=['setting','data','data_chunks','case','result','result_chunks
 
 
 @app.get("/get_user_strategies/")
-def get_user_strategies(login: LoginUser) -> dict:
+async def get_user_strategies(login: LoginUser) -> dict:
     doc=DB.db['users'].find_one({'name': login.username})    
     strategies_id = [str(std_id) for std_id in doc['favorites']]     
     return {"result": {'strategies': strategies_id}}
 
+@app.get("/get_all_public_strategies/")
+async def get_all_public_strategies() -> dict:
+    strategies = DB.db['strategies'].find({"public": True})
+    strategies_id = [str(std["_id"]) for std in strategies]
+    return {"result": {'strategies': strategies_id}}
+
 @app.get("/get_strategy/")
-def get_strategy(strategy: Strategy) -> dict:
+async def get_strategy(strategy: Strategy) -> dict:
     doc=DB.db['strategies'].find_one({'_id': strategy.objectID})
-    return {"result": {"name": doc["name"], "description": doc["description"], "type": doc["strategy_type"],}}
+    return {"result": {"name": doc["name"], "description": doc["description"], "type": doc["strategy_type"],} if doc is not None else {"name": None, "description": None, "type": None}}
 
 @app.get("/get_strategy_id/")
-def get_strategy_id(strategy: Strategy) -> dict:
+async def get_strategy_id(strategy: Strategy) -> dict:
     strategyInfo = DB.db['strategies'].find_one({'name':strategy.name})
     return {"result": str(strategyInfo['_id'])}
 
@@ -83,6 +89,7 @@ async def get_user_favorites_name(user: UserId) -> dict:
     favorites_name = []
     for fav_id in favorites_id:
         favorites_name.append(DB.db['strategies'].find_one({'_id': fav_id})['name'])
+
     return {"result": favorites_name}
 
 

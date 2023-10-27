@@ -17,7 +17,7 @@ async def exist_object(model: Model, object: DataObjectType)-> dict:
     return {"result": False}
 
 @app.get("/get_candlestickechart_option/")
-async def get_candlestickechart_option(object: DataObjectType, model: Model, show: dict) -> dict:
+async def get_candlestickechart_option(object: DataObjectType, model: Model, show: dict,tooltip: dict) -> dict:
     data = restore_dataframe('data',object.super, model.objectID)
     result = restore_dataframe('result',object.super, model.objectID)
     positions = DB.db['positions'].find_one({'model_id': model.objectID, 'super': object.super})['positions']
@@ -25,7 +25,7 @@ async def get_candlestickechart_option(object: DataObjectType, model: Model, sho
     orders = DB.db['orders'].find_one({'model_id': model.objectID, 'super': object.super})['orders']
     if show['impulses']:
         impulses = DB.db['impulses'].find_one({'model_id': model.objectID, 'super': object.super})['impulses']
-    echart = CandelstickEChart(data=data,result=result, show=show, positions=positions, levels=levels, orders= orders, impulses=impulses if show['impulses'] else None)
+    echart = CandelstickEChart(data=data,result=result, show=show, tooltip=tooltip, positions=positions, levels=levels, orders= orders, impulses=impulses if show['impulses'] else None)
     
     return {'result': echart.getOption()}
 

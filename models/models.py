@@ -5,9 +5,15 @@ from bson import ObjectId
 
 
 class LoginUser(BaseModel):
-    username: str
+    username: Optional[str]
     password: Optional[str]
+    email: Optional[str]
 
+class TokenEmail(BaseModel):
+    subject: Optional[str]
+    content: Optional[str]
+    function: Optional[str]
+    
 class UserId(BaseModel):
     id: str
     
@@ -86,6 +92,7 @@ class StrategyBuilder(BaseModel):
     version: Optional[int]
     settings: Optional[dict]
     tc_assumptions: Optional[dict]
+    template: Optional[dict]
     assumptions: Optional[dict]
     id: Optional[str]
     
@@ -94,6 +101,5 @@ class StrategyBuilder(BaseModel):
         return ObjectId(self.id)
 
 
-
-
-
+class Favorites(BaseModel):
+    favorites: Optional[List]

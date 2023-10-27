@@ -8,7 +8,7 @@ SUBPLOT_PARAMETERS = ['volume','delta','result','balance','rsi','atr','ar','dail
 class CandelstickEChart():
     
 #---- Constructor
-    def __init__(self, data: DataFrame, result: DataFrame, show:dict, levels: list, positions: list, orders: list, impulses: list):
+    def __init__(self, data: DataFrame, result: DataFrame, show:dict, tooltip: dict, levels: list, positions: list, orders: list, impulses: list):
         self.data = data
         self.result = result
         self.show = show
@@ -16,11 +16,12 @@ class CandelstickEChart():
         self.positions = positions
         self.orders = orders
         self.impulses = impulses
+        self.tooltip = tooltip
         
 ### ----------- Datos 
 
     @staticmethod
-    def tooltip()->dict:
+    def get_tooltip()->dict:
         return {
                 "trigger": 'axis',
                 "axisPointer": {
@@ -247,12 +248,11 @@ class CandelstickEChart():
 
        # DP  
         if self.show['dp']:    
-            self.dp()
-            
+            self.dp()            
                       
        # TC
         if self.show['tc']:
-            pass
+            self.touch_candles()
         
        # Trades
         if self.show['trades']:
@@ -292,7 +292,9 @@ class CandelstickEChart():
         if self.show['impulses']:
             self.get_impulses()
 
-            
+        # TLS
+        if self.show['tls']:
+            self.tls()        
       
       # Subplots
         next_subplot = 1                    # Contador para indicar en que grid se dibujara el siguiente subplot activo
@@ -344,7 +346,7 @@ class CandelstickEChart():
     def getOption(self)-> dict:
         return {
             "progressive": 300,
-            "tooltip": self.tooltip(),
+            "tooltip": self.get_tooltip(),
             "axisPointer": self.axisPointer(),
             "grid": self.grid(),
             "xAxis": self.xAxis(),
@@ -381,7 +383,7 @@ class CandelstickEChart():
         return {
             "name": "MVC",
             "type": "scatter",
-            "symbolSize": 4,
+            "symbolSize": 2,
             "xAxisIndex": 0,
             "yAxisIndex": 0,
             "data": self.data.MVC.tolist(),
@@ -411,6 +413,23 @@ class CandelstickEChart():
                     "symbol": 'none',
                     "symbolsize": 10,  
                 }])
+
+    # Serie para las Touch Candles
+    def touch_candles(self) -> dict:
+        return {
+            "name": "TC",
+            "type": "scatter",
+            "symbolSize": 30,
+            "xAxisIndex": 0,
+            "yAxisIndex": 0,
+            "data": self.data.Close.tolist(),
+            "itemStyle": {
+                "color": "pink",
+            },
+            "tooltip": {                
+            },
+        }
+
 
     # Serie para los lineas de los trades
     def trades_lines(self) -> None:
@@ -729,6 +748,65 @@ class CandelstickEChart():
                         "coord": [x1,y1],                # Coordenadas del punto final 
                     }
                 ])
+
+    # Serie para los TLS
+    def tls(self) -> None:
+        # Los TLS estan en la columna TLS_Result del data. Primero extraermos los TLS_Result 1 que indican Largos Atrapados  y los TLS_Result -1 que indican Cortos Atrapados. Nos quedamos con la culumna Time donde aparecen
+        _trapped_long_time = self.data.Time[self.data.TLS_Result==1]
+        _trapped_long_high = self.data.High[self.data.TLS_Result==1]
+        _tls_upper_delta = self.data.TLS_Upper_Delta[self.data.TLS_Result==1]
+        _tls_upper_ask_percentage = self.data.TLS_Upper_Ask_Percentage[self.data.TLS_Result==1]
+        _tls_upper_asl_levels_percentage = self.data.TLS_Upper_Ask_Levels_Percentage[self.data.TLS_Result==1]
+        _tls_upper_tooltip = [f"Upper Delta: {delta} \nAsk%: {ask} \nAsk Levels%: {asl}" for delta,ask,asl in zip(_tls_upper_delta,_tls_upper_ask_percentage,_tls_upper_asl_levels_percentage)]
+
+
+        # Creamos la serie para los largos atrapados. Seran tipo MarkPoint
+        for time,high,tooltip in zip(_trapped_long_time,_trapped_long_high,_tls_upper_tooltip):
+            self.serie[0]['markPoint']['data'].append(
+                {
+                    "name": "Trapped Long",
+                    "coord": [time.strftime("%Y-%m-%d %H:%M:%S"),high],
+                    'value': tooltip,
+                    "itemStyle": {
+                        "color": "green",
+                    },
+                    "symbolSize": 10,
+                    "label": {
+                        "offset": [0, -10],  # Añade esta línea para desplazar la marca 5 unidades hacia arriba
+                    }, 
+                    'tooltip': {
+                        'formatter': tooltip
+                    }
+                }
+            )
+        
+        # Creamos la serie para los cortos atrapados. Seran tipo MarkPoint
+        _trapped_short_time = self.data.Time[self.data.TLS_Result==-1]
+        _trapped_short_low = self.data.Low[self.data.TLS_Result==-1]
+        _tls_lower_delta = self.data.TLS_Lower_Delta[self.data.TLS_Result==-1]
+        _tls_lower_bid_percentage = self.data.TLS_Lower_Bid_Percentage[self.data.TLS_Result==-1]
+        _tls_lower_asl_levels_percentage = self.data.TLS_Lower_Bid_Levels_Percentage[self.data.TLS_Result==-1]
+        _tls_lower_tooltip = [f"Lower Delta: {delta} \nBid%: {bid} \nBid Levels%: {asl}" for delta,bid,asl in zip(_tls_lower_delta,_tls_lower_bid_percentage,_tls_lower_asl_levels_percentage)]
+        for time,low,tooltip in zip(_trapped_short_time,_trapped_short_low, _tls_lower_tooltip):
+            self.serie[0]['markPoint']['data'].append(
+                {
+                    "name": "Trapped Short",
+                    "coord": [time.strftime("%Y-%m-%d %H:%M:%S"),low],
+                    "itemStyle": {
+                        "color": "red",
+                    },
+                    "value": "TS",
+                    "symbolRotate": 180, 
+                    "symbolSize": 10,
+                    "label": {
+                        "offset": [0, 10],  # Añade esta línea para desplazar la marca 5 unidades hacia arriba
+                    },
+                    'tooltip': {
+                        'formatter': tooltip
+                    }
+                }
+            )
+
 
 ### -------------- Subplots --------------------------------------
 
