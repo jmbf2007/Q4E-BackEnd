@@ -8,7 +8,7 @@ SUBPLOT_PARAMETERS = ['volume','delta','result','balance','rsi','atr','ar','dail
 class CandelstickEChart():
     
 #---- Constructor
-    def __init__(self, data: DataFrame, result: DataFrame, show:dict, tooltip: dict, levels: list, positions: list, orders: list, impulses: list):
+    def __init__(self, data: DataFrame, result: DataFrame, show:dict, tooltip: dict, levels: list, positions: list, orders: list, impulses: list, tc: list=None):
         self.data = data
         self.result = result
         self.show = show
@@ -17,16 +17,20 @@ class CandelstickEChart():
         self.orders = orders
         self.impulses = impulses
         self.tooltip = tooltip
+        if tc is not None:
+            self.tc = tc
+        
         
 ### ----------- Datos 
 
     @staticmethod
     def get_tooltip()->dict:
         return {
-                "trigger": 'axis',
-                "axisPointer": {
-                    "type": 'cross'
-                },
+                "show": False,
+                #"trigger": 'axis',
+                #"axisPointer": {
+                #    "type": 'cross'
+                #},
         }
     
     @staticmethod
@@ -343,7 +347,7 @@ class CandelstickEChart():
 
 
     # Método que devuelve el diccionario con la configuracion del option
-    def getOption(self)-> dict:
+    def getOption(self)-> dict: 
         return {
             "progressive": 300,
             "tooltip": self.get_tooltip(),
@@ -415,20 +419,30 @@ class CandelstickEChart():
                 }])
 
     # Serie para las Touch Candles
-    def touch_candles(self) -> dict:
-        return {
-            "name": "TC",
-            "type": "scatter",
-            "symbolSize": 30,
-            "xAxisIndex": 0,
-            "yAxisIndex": 0,
-            "data": self.data.Close.tolist(),
-            "itemStyle": {
-                "color": "pink",
-            },
-            "tooltip": {                
-            },
-        }
+    def touch_candles(self) -> None:
+        for tc in self.tc:
+            if self.tooltip['tc']:
+                tc_tooltip =""
+                for assumption in tc['Assumptions']:
+                    for key,value in assumption.items():
+                        tc_tooltip += f"{key}: {value}\n" 
+            self.serie[0]['markPoint']['data'].append(
+                {
+                    "coord": [self.data['Time'].iloc[tc['Index']].strftime("%Y-%m-%d %H:%M:%S"),self.data['High'].iloc[tc['Index']]],
+                    "symbol": 'diamond',
+                    "symbolSize": 5,
+                    "label": {
+                        "offset": [0, -10],  # Añade esta línea para desplazar la marca 5 unidades hacia arriba
+                    }, 
+                    "value": tc_tooltip if self.tooltip['tc'] else "TC",
+                    "itemStyle": {
+                        "color": "blue",
+                    },
+                    "tooltip": {
+                        "formatter": tc_tooltip if self.tooltip['tc'] else None
+                    }
+                }
+            )
 
 
     # Serie para los lineas de los trades

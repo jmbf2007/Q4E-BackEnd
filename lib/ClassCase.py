@@ -634,3 +634,4 @@ class cCase():
             return self.strategy_logic.tc[self.strategy_logic.tc_entry]['auto_entry_price']
         
 
+    

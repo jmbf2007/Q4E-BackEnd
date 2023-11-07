@@ -43,8 +43,11 @@ class StrategyLogic():
             
     def strategy_level_tc(self, candle: Candle, levels: list) -> bool:
         result = LevelTCLogic.check_new_entry(candle=candle, tc_assumptions= self.tc_assumptions, setting=self.setting, levels=levels, tc_lenght=len(self.tc))
-        if result['tc'] is not None and result['tc'].Entry:
-            return self.add_tc_and_order(result)
+        if result['tc'] is not None:
+            self.tc.append(result['tc'].to_dict())
+            if result['tc'].Entry:
+                self.orders.append(result['order'].to_dict())
+                return True
         return False   
 
     def strategy_candle_pattern(self, candle: Candle) -> bool:
@@ -60,8 +63,3 @@ class StrategyLogic():
             return self.add_tc_and_order(result)
         return False
 
-
-    def add_tc_and_order(self, result) -> bool:
-        self.tc.append(result['tc'].to_dict())
-        self.orders.append(result['order'].to_dict())
-        return True
